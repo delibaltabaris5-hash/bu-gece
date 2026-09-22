@@ -10,7 +10,7 @@ import { colors, fontFamily, night, radius, space } from '@/theme';
 const ROWS = [
   {
     title: 'Ücretsiz',
-    body: 'Cinsiyet simgesi, geçici numara ve 1–2 mesaj. Hak bitince Sohbetler Pro kilidini gösterir.',
+    body: 'Cinsiyet simgesi, geçici numara ve 10 mesaj. Hak bitince Sohbetler Pro kilidini gösterir.',
   },
   {
     title: 'Pro',
@@ -22,14 +22,19 @@ export default function ProScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isPro = useAppStore((state) => state.isPro);
+  const accountId = useAppStore((state) => state.accountId);
   const proBusy = useAppStore((state) => state.proBusy);
   const unlockPro = useAppStore((state) => state.unlockPro);
   const revokePro = useAppStore((state) => state.revokePro);
   const [note, setNote] = useState('');
 
   const buy = async () => {
+    if (!accountId) {
+      router.push('/giris');
+      return;
+    }
     const ok = await unlockPro();
-    setNote(ok ? 'Pro bu cihazda açıldı.' : 'Kilit açılmadı.');
+    setNote(ok ? 'Pro bu hesapta açıldı.' : 'Kilit açılmadı.');
   };
 
   return (
@@ -62,7 +67,7 @@ export default function ProScreen() {
           </>
         ) : (
           <PrimaryButton
-            label={proBusy ? 'Açılıyor…' : 'Pro’yu aç'}
+            label={!accountId ? 'Üye girişi' : proBusy ? 'Açılıyor…' : 'Pro’yu aç'}
             disabled={proBusy}
             onPress={() => {
               void buy();
@@ -71,7 +76,7 @@ export default function ProScreen() {
         )}
         {note ? <Text style={styles.note}>{note}</Text> : null}
         <Text style={styles.footnote}>
-          Google Play Billing bu sürümde bağlı değil. “Pro’yu aç” yerel bir deneme kilididir ve yalnızca bu cihazda durur.
+          Google Play Billing bu sürümde bağlı değil. “Pro’yu aç” yerel bir deneme kilididir ve bu hesaba yazılır.
         </Text>
       </ScrollView>
     </View>

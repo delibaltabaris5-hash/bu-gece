@@ -1,9 +1,9 @@
-export const FREE_MESSAGE_QUOTA = 2;
+export const FREE_MESSAGE_QUOTA = 10;
 
-export function quotaLabel(remaining: number, isPro: boolean): string {
+export function quotaLabel(remaining: number, isPro: boolean, signedIn = true): string {
+  if (!signedIn) return `Üye girişi: ${FREE_MESSAGE_QUOTA} mesaj`;
   if (isPro) return 'Pro: sınırsız mesaj';
   if (remaining <= 0) return 'Ücretsiz: mesaj kalmadı';
-  if (remaining <= FREE_MESSAGE_QUOTA) return 'Ücretsiz: 1–2 mesaj kaldı';
   return `Ücretsiz: ${remaining} mesaj kaldı`;
 }
 

@@ -13,7 +13,10 @@ function TabGlyph({ glyph, color }: { glyph: string; color: ColorValue }) {
 export default function TabLayout() {
   const hydrated = useAppStore((state) => state.hydrated);
   const onboarded = useAppStore((state) => state.onboarded);
+  const authStepDone = useAppStore((state) => state.authStepDone);
+  const accountId = useAppStore((state) => state.accountId);
 
+  if (hydrated && !authStepDone && !accountId) return <Redirect href="/giris" />;
   if (hydrated && !onboarded) return <Redirect href="/onboarding" />;
 
   return (

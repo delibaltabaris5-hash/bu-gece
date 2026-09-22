@@ -9,12 +9,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AtmosphereControl } from '@/components/AtmosphereControl';
 import { AtmosphereHost } from '@/hooks/useAtmosphere';
+import '@/lib/googleAuth';
+import { reconcileSecureQuota, watchSecureQuotaAfterHydration } from '@/lib/secureQuota';
 import { useAppStore } from '@/store/useAppStore';
 import { colors, night } from '@/theme';
 
 function AtmosphereChrome() {
   const segments = useSegments();
-  if (segments[0] === '(tabs)') return null;
+  if (segments[0] === '(tabs)' || segments[0] === 'giris') return null;
   return <AtmosphereControl />;
 }
 
@@ -25,13 +27,17 @@ export default function RootLayout() {
     const finish = () => {
       if (settled) return;
       settled = true;
-      useAppStore.setState({ hydrated: true });
+      void reconcileSecureQuota().finally(() => {
+        useAppStore.setState({ hydrated: true });
+      });
     };
     const unsubscribe = useAppStore.persist.onFinishHydration(finish);
+    const stopWatch = watchSecureQuotaAfterHydration();
     if (useAppStore.persist.hasHydrated()) finish();
     const timer = setTimeout(finish, 2500);
     return () => {
       unsubscribe();
+      stopWatch();
       clearTimeout(timer);
     };
   }, []);
@@ -54,6 +60,7 @@ export default function RootLayout() {
               }}
             >
               <Stack.Screen name="index" />
+              <Stack.Screen name="giris" />
               <Stack.Screen name="onboarding" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="oda/[id]" />

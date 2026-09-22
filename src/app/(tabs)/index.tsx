@@ -1,14 +1,14 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { Crescent } from '@/components/Crescent';
 import { InterestBubble } from '@/components/InterestBubble';
 import { Screen } from '@/components/ui';
 import { BUBBLE_ART } from '@/data/bubbleArt';
-import { placeConstellation, type HomeScope } from '@/data/constellation';
+import { placeConstellation } from '@/data/constellation';
 import { getRoom } from '@/data/rooms';
-import { quotaLabel, quotaRatio } from '@/lib/quota';
+import { FREE_MESSAGE_QUOTA, quotaLabel, quotaRatio } from '@/lib/quota';
 import { useAppStore } from '@/store/useAppStore';
 import { fontFamily, night } from '@/theme';
 
@@ -26,8 +26,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const { width: windowWidth } = useWindowDimensions();
   const isPro = useAppStore((state) => state.isPro);
+  const accountId = useAppStore((state) => state.accountId);
   const remaining = useAppStore((state) => state.freeMessagesRemaining);
-  const [scope, setScope] = useState<HomeScope>('yakindakiler');
   const [field, setField] = useState({ width: 0, height: 0 });
 
   const placed = useMemo(
@@ -35,7 +35,8 @@ export default function HomeScreen() {
     [field.width, field.height],
   );
   const titleSize = Math.min(46, Math.max(34, Math.min(windowWidth, 480) * 0.108));
-  const ratio = quotaRatio(remaining, isPro);
+  const signedIn = Boolean(accountId);
+  const ratio = signedIn ? quotaRatio(remaining, isPro) : 0;
 
   return (
     <Screen backgroundColor={night.bg} bottom={false}>
@@ -69,19 +70,6 @@ export default function HomeScreen() {
           <Crescent size={Math.max(22, titleSize * 0.46)} cutoutColor={night.bg} />
         </View>
 
-        <View accessibilityRole="tablist" style={styles.segment}>
-          <ScopeTab
-            label="Yakındakiler"
-            selected={scope === 'yakindakiler'}
-            onPress={() => setScope('yakindakiler')}
-          />
-          <ScopeTab
-            label="Genel"
-            selected={scope === 'genel'}
-            onPress={() => setScope('genel')}
-          />
-        </View>
-
         <View
           style={styles.field}
           onLayout={(event) => {
@@ -93,10 +81,6 @@ export default function HomeScreen() {
         >
           {placed.map((bubble) => {
             const room = getRoom(bubble.id);
-            const distance =
-              scope === 'yakindakiler' && bubble.distanceKm
-                ? `${bubble.distanceKm.toFixed(1)} km`
-                : null;
             return (
               <InterestBubble
                 key={bubble.id}
@@ -106,7 +90,6 @@ export default function HomeScreen() {
                 left={bubble.left}
                 top={bubble.top}
                 hero={bubble.hero}
-                distanceLabel={distance}
                 onPress={() => router.push(`/oda/${bubble.id}`)}
               />
             );
@@ -116,15 +99,15 @@ export default function HomeScreen() {
         <View style={styles.quota}>
           <View style={styles.quotaCopy}>
             <Text style={styles.quotaText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
-              {quotaLabel(remaining, isPro)}
+              {quotaLabel(remaining, isPro, signedIn)}
             </Text>
             <View
               accessibilityRole="progressbar"
               accessibilityLabel="Ücretsiz mesaj hakkı"
               accessibilityValue={{
                 min: 0,
-                max: 2,
-                now: isPro ? 2 : Math.max(0, remaining),
+                max: FREE_MESSAGE_QUOTA,
+                now: !signedIn ? 0 : isPro ? FREE_MESSAGE_QUOTA : Math.max(0, Math.min(FREE_MESSAGE_QUOTA, remaining)),
               }}
               style={styles.progressTrack}
             >
@@ -134,27 +117,6 @@ export default function HomeScreen() {
         </View>
       </View>
     </Screen>
-  );
-}
-
-function ScopeTab({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="tab"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[styles.scope, selected && styles.scopeOn]}
-    >
-      <Text style={[styles.scopeLabel, selected && styles.scopeLabelOn]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -185,48 +147,6 @@ const styles = StyleSheet.create({
       android: { includeFontPadding: false },
       default: {},
     }),
-  },
-  segment: {
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    padding: 3,
-    minHeight: 48,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(130, 196, 255, 0.55)',
-    backgroundColor: 'rgba(8, 18, 34, 0.72)',
-    elevation: 6,
-    shadowColor: night.glow,
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  scope: {
-    minHeight: 44,
-    paddingHorizontal: 16,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scopeOn: {
-    backgroundColor: night.segment,
-    elevation: 4,
-    shadowColor: night.glow,
-    shadowOpacity: 0.7,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  scopeLabel: {
-    color: '#D7E6F4',
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: fontFamily.sans,
-  },
-  scopeLabelOn: {
-    color: '#FFFFFF',
-    fontWeight: '700',
   },
   field: {
     flex: 1,

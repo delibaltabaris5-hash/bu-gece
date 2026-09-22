@@ -6,6 +6,7 @@ import { Avatar } from '@/components/Avatar';
 import { ContactPanel } from '@/components/ContactPanel';
 import { Pill, PrimaryButton, Screen, SecondaryButton } from '@/components/ui';
 import { getRoom } from '@/data/rooms';
+import { writeSessionAccountId } from '@/lib/accountBook';
 import { MOODS, genderLabel, labelOf } from '@/labels';
 import { useAppStore } from '@/store/useAppStore';
 import { colors, fontFamily, night, radius, space } from '@/theme';
@@ -16,6 +17,10 @@ export default function SettingsScreen() {
   const room = getRoom(useAppStore((state) => state.roomId));
   const mood = useAppStore((state) => state.mood);
   const isPro = useAppStore((state) => state.isPro);
+  const accountId = useAppStore((state) => state.accountId);
+  const accountEmail = useAppStore((state) => state.accountEmail);
+  const accountName = useAppStore((state) => state.accountName);
+  const signOut = useAppStore((state) => state.signOut);
   const freeMessagesRemaining = useAppStore((state) => state.freeMessagesRemaining);
   const stableNick = useAppStore((state) => state.stableNick);
   const tempNick = useAppStore((state) => state.tempNick);
@@ -69,8 +74,12 @@ export default function SettingsScreen() {
             <Pill label={isPro ? 'Pro' : 'Ücretsiz'} tone={isPro ? 'gold' : 'muted'} />
           </View>
           <Text style={styles.body}>
-            Ücretsiz planda kişiler simge ve geçici numarayla görünür. Oda ve Sohbetler aynı 1–2 mesajı paylaşır
-            {isPro ? ' (Pro ile sınırsız).' : ` (${Math.max(0, freeMessagesRemaining)} kaldı).`}
+            Ücretsiz planda kişiler simge ve geçici numarayla görünür. Oda ve Sohbetler aynı 10 mesajı paylaşır. Mesaj hakkı üye hesabına bağlıdır.
+            {isPro
+              ? ' (Pro ile sınırsız).'
+              : accountId
+                ? ` (${Math.max(0, freeMessagesRemaining)} kaldı).`
+                : ' Yazmak için giriş gerekir.'}
           </Text>
           <Text style={styles.body}>
             Pro, sabit takma adı, kısa tanıtımı ve sınırsız mesajı açar. Bu sürümde kilit yerel bir denemedir.
@@ -89,6 +98,35 @@ export default function SettingsScreen() {
           </Text>
           <SecondaryButton label="Kimliği sıfırla" onPress={confirmReset} />
         </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={accountId ? 'Hesabım' : 'Giriş yap'}
+          onPress={() => router.push('/giris')}
+          style={({ pressed }) => [styles.contact, pressed && styles.pressed]}
+        >
+          <View>
+            <Text style={styles.contactLabel}>{accountId ? 'Hesabım' : 'Giriş yap'}</Text>
+            <Text style={styles.meta}>
+              {accountId ? accountName || accountEmail || accountId : 'Üye girişi veya kayıt'}
+            </Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+        {accountId ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Çıkış yap"
+            onPress={() => {
+              void writeSessionAccountId(null);
+              signOut();
+            }}
+            style={({ pressed }) => [styles.contact, pressed && styles.pressed]}
+          >
+            <Text style={styles.contactLabel}>Çıkış yap</Text>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        ) : null}
 
         <Pressable
           accessibilityRole="button"

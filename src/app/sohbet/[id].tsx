@@ -27,6 +27,7 @@ export default function SohbetThreadScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const member = getMember(params.id);
   const isPro = useAppStore((state) => state.isPro);
+  const accountId = useAppStore((state) => state.accountId);
   const gender = useAppStore((state) => state.gender);
   const stableNick = useAppStore((state) => state.stableNick);
   const tempNick = useAppStore((state) => state.tempNick);
@@ -36,7 +37,8 @@ export default function SohbetThreadScreen() {
   const [draft, setDraft] = useState('');
 
   const data = useMemo(() => [...(thread ?? [])].reverse(), [thread]);
-  const quotaBlocked = !isPro && remaining <= 0;
+  const signedIn = Boolean(accountId);
+  const quotaBlocked = signedIn && !isPro && remaining <= 0;
 
   if (!member) {
     return (
@@ -65,6 +67,10 @@ export default function SohbetThreadScreen() {
   };
 
   const send = () => {
+    if (!signedIn) {
+      router.push('/giris');
+      return;
+    }
     if (quotaBlocked) return;
     const sent = postDirectMessage(member.id, draft);
     if (sent) setDraft('');
@@ -93,7 +99,9 @@ export default function SohbetThreadScreen() {
           <Text style={styles.emptyText}>
             {isPro
               ? 'İlk cümleyi sen bırak. Konum paylaşılmaz.'
-              : `Ücretsiz: ${Math.max(0, remaining)} mesaj kaldı. Simge ve geçici numara.`}
+              : !signedIn
+                ? 'Yazmak için üye girişi gerekir.'
+                : `Ücretsiz: ${Math.max(0, remaining)} mesaj kaldı. Simge ve geçici numara.`}
           </Text>
         </View>
       ) : (
@@ -109,7 +117,13 @@ export default function SohbetThreadScreen() {
       )}
 
       <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        {quotaBlocked ? (
+        {!signedIn ? (
+          <View style={styles.paywall}>
+            <Text style={styles.payTitle}>Üye girişi</Text>
+            <Text style={styles.payBody}>Misafir gezinebilir. Mesaj hakkı hesaba bağlıdır.</Text>
+            <PrimaryButton label="Giriş yap" onPress={() => router.push('/giris')} />
+          </View>
+        ) : quotaBlocked ? (
           <View style={styles.paywall}>
             <Text style={styles.payTitle}>Ücretsiz mesaj hakkın doldu</Text>
             <Text style={styles.payBody}>Pro sınırsız yazar ve sabit adı açar.</Text>

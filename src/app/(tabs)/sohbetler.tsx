@@ -21,6 +21,7 @@ type Phase = 'ask' | 'search' | 'found';
 export default function SohbetlerScreen() {
   const router = useRouter();
   const isPro = useAppStore((state) => state.isPro);
+  const accountId = useAppStore((state) => state.accountId);
   const remaining = useAppStore((state) => state.freeMessagesRemaining);
   const storedMood = useAppStore((state) => state.mood);
   const setMood = useAppStore((state) => state.setMood);
@@ -77,8 +78,13 @@ export default function SohbetlerScreen() {
 
         {segment === 'genel' ? (
           <>
-            <Text style={styles.quota}>{quotaLabel(remaining, isPro)}</Text>
-            {!isPro && remaining <= 0 ? (
+            <Text style={styles.quota}>{quotaLabel(remaining, isPro, Boolean(accountId))}</Text>
+            {!accountId ? (
+              <Pressable accessibilityRole="button" onPress={() => router.push('/giris')} style={styles.payStrip}>
+                <Text style={styles.payStripText}>Yazmak için üye girişi</Text>
+                <Text style={styles.payStripCta}>Giriş yap</Text>
+              </Pressable>
+            ) : !isPro && remaining <= 0 ? (
               <Pressable accessibilityRole="button" onPress={() => router.push('/pro')} style={styles.payStrip}>
                 <Text style={styles.payStripText}>Ücretsiz mesaj hakkın doldu</Text>
                 <Text style={styles.payStripCta}>Pro’yu aç</Text>
