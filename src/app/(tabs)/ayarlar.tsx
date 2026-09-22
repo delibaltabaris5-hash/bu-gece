@@ -1,7 +1,9 @@
 import { useRouter } from 'expo-router';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
+import { ContactPanel } from '@/components/ContactPanel';
 import { Pill, PrimaryButton, Screen, SecondaryButton } from '@/components/ui';
 import { getRoom } from '@/data/rooms';
 import { MOODS, genderLabel, labelOf } from '@/labels';
@@ -19,6 +21,7 @@ export default function SettingsScreen() {
   const tempNick = useAppStore((state) => state.tempNick);
   const resetIdentity = useAppStore((state) => state.resetIdentity);
   const revokePro = useAppStore((state) => state.revokePro);
+  const [contactOpen, setContactOpen] = useState(false);
 
   const confirmReset = () => {
     Alert.alert(
@@ -86,7 +89,18 @@ export default function SettingsScreen() {
           </Text>
           <SecondaryButton label="Kimliği sıfırla" onPress={confirmReset} />
         </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="İletişim"
+          onPress={() => setContactOpen(true)}
+          style={({ pressed }) => [styles.contact, pressed && styles.pressed]}
+        >
+          <Text style={styles.contactLabel}>İletişim</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
       </ScrollView>
+      <ContactPanel visible={contactOpen} onClose={() => setContactOpen(false)} />
     </Screen>
   );
 }
@@ -149,5 +163,30 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 14,
     lineHeight: 21,
+  },
+  contact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingVertical: 12,
+    paddingHorizontal: space.lg,
+  },
+  contactLabel: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  chevron: {
+    color: night.glowBright,
+    fontSize: 22,
+    fontWeight: '600',
+    lineHeight: 24,
+  },
+  pressed: {
+    opacity: 0.86,
   },
 });
