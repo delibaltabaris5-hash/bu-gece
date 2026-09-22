@@ -1,12 +1,12 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { Crescent } from '@/components/Crescent';
 import { InterestBubble } from '@/components/InterestBubble';
 import { Screen } from '@/components/ui';
 import { BUBBLE_ART } from '@/data/bubbleArt';
-import { placeConstellation, type HomeScope } from '@/data/constellation';
+import { placeConstellation } from '@/data/constellation';
 import { getRoom } from '@/data/rooms';
 import { quotaLabel, quotaRatio } from '@/lib/quota';
 import { useAppStore } from '@/store/useAppStore';
@@ -27,7 +27,6 @@ export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const isPro = useAppStore((state) => state.isPro);
   const remaining = useAppStore((state) => state.freeMessagesRemaining);
-  const [scope, setScope] = useState<HomeScope>('yakindakiler');
   const [field, setField] = useState({ width: 0, height: 0 });
 
   const placed = useMemo(
@@ -69,19 +68,6 @@ export default function HomeScreen() {
           <Crescent size={Math.max(22, titleSize * 0.46)} cutoutColor={night.bg} />
         </View>
 
-        <View accessibilityRole="tablist" style={styles.segment}>
-          <ScopeTab
-            label="Yakındakiler"
-            selected={scope === 'yakindakiler'}
-            onPress={() => setScope('yakindakiler')}
-          />
-          <ScopeTab
-            label="Genel"
-            selected={scope === 'genel'}
-            onPress={() => setScope('genel')}
-          />
-        </View>
-
         <View
           style={styles.field}
           onLayout={(event) => {
@@ -93,10 +79,6 @@ export default function HomeScreen() {
         >
           {placed.map((bubble) => {
             const room = getRoom(bubble.id);
-            const distance =
-              scope === 'yakindakiler' && bubble.distanceKm
-                ? `${bubble.distanceKm.toFixed(1)} km`
-                : null;
             return (
               <InterestBubble
                 key={bubble.id}
@@ -106,7 +88,6 @@ export default function HomeScreen() {
                 left={bubble.left}
                 top={bubble.top}
                 hero={bubble.hero}
-                distanceLabel={distance}
                 onPress={() => router.push(`/oda/${bubble.id}`)}
               />
             );
@@ -137,27 +118,6 @@ export default function HomeScreen() {
   );
 }
 
-function ScopeTab({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="tab"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[styles.scope, selected && styles.scopeOn]}
-    >
-      <Text style={[styles.scopeLabel, selected && styles.scopeLabelOn]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   sky: {
     flex: 1,
@@ -185,48 +145,6 @@ const styles = StyleSheet.create({
       android: { includeFontPadding: false },
       default: {},
     }),
-  },
-  segment: {
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    padding: 3,
-    minHeight: 48,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(130, 196, 255, 0.55)',
-    backgroundColor: 'rgba(8, 18, 34, 0.72)',
-    elevation: 6,
-    shadowColor: night.glow,
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  scope: {
-    minHeight: 44,
-    paddingHorizontal: 16,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scopeOn: {
-    backgroundColor: night.segment,
-    elevation: 4,
-    shadowColor: night.glow,
-    shadowOpacity: 0.7,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  scopeLabel: {
-    color: '#D7E6F4',
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: fontFamily.sans,
-  },
-  scopeLabelOn: {
-    color: '#FFFFFF',
-    fontWeight: '700',
   },
   field: {
     flex: 1,
