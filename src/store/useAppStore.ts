@@ -10,6 +10,7 @@ import { buildSeedMessages } from '@/data/seedMessages';
 import { topicForDay } from '@/data/topics';
 import { topicBody, todayKey } from '@/lib/format';
 import { pickStableNick, pickTempNumber } from '@/lib/identity';
+import { FREE_MESSAGE_QUOTA } from '@/lib/quota';
 import type {
   ChatMessage,
   DirectMessage,
@@ -29,6 +30,7 @@ interface PersistedSlice {
   roomMessages: Record<RoomId, ChatMessage[]>;
   directMessages: Record<string, DirectMessage[]>;
   topicDayByRoom: Partial<Record<RoomId, string>>;
+  freeMessagesRemaining: number;
 }
 
 interface AppState extends PersistedSlice {
@@ -43,7 +45,7 @@ interface AppState extends PersistedSlice {
   unlockPro: () => Promise<boolean>;
   revokePro: () => void;
   ensureDailyTopic: (roomId: RoomId) => void;
-  postRoomMessage: (roomId: RoomId, text: string) => void;
+  postRoomMessage: (roomId: RoomId, text: string) => boolean;
   postDirectMessage: (memberId: string, text: string) => void;
 }
 
@@ -62,6 +64,7 @@ const emptyPersisted = (): PersistedSlice => ({
   roomMessages: buildSeedMessages(),
   directMessages: {},
   topicDayByRoom: {},
+  freeMessagesRemaining: FREE_MESSAGE_QUOTA,
 });
 
 assertCatalog();
@@ -91,6 +94,7 @@ export const useAppStore = create<AppState>()(
           mood: null,
           stableNick: '',
           tempNick: '',
+          freeMessagesRemaining: FREE_MESSAGE_QUOTA,
         });
       },
       unlockPro: async () => {
@@ -131,10 +135,12 @@ export const useAppStore = create<AppState>()(
       },
       postRoomMessage: (roomId, text) => {
         const trimmed = text.trim().slice(0, 400);
-        if (!trimmed) return;
+        if (!trimmed) return false;
+        const state = get();
+        if (!state.isPro && state.freeMessagesRemaining <= 0) return false;
         const room = getRoom(roomId);
         const now = Date.now();
-        const current = get().roomMessages[roomId] ?? [];
+        const current = state.roomMessages[roomId] ?? [];
         const userMessage: ChatMessage = {
           id: `self_${roomId}_${now}`,
           roomId,
@@ -143,14 +149,17 @@ export const useAppStore = create<AppState>()(
           createdAt: now,
         };
         set({
+          freeMessagesRemaining: state.isPro
+            ? state.freeMessagesRemaining
+            : state.freeMessagesRemaining - 1,
           roomMessages: {
-            ...get().roomMessages,
+            ...state.roomMessages,
             [roomId]: trimThread([...current, userMessage]),
           },
         });
         const selfCount = current.filter((item) => item.authorKind === 'self').length;
         const asked = trimmed.includes('?');
-        if (!asked && selfCount % 2 === 1) return;
+        if (!asked && selfCount % 2 === 1) return true;
         const replyText = botReply(room?.name ?? 'Oda', selfCount + trimmed.length);
         setTimeout(() => {
           const latest = get().roomMessages[roomId] ?? [];
@@ -168,6 +177,7 @@ export const useAppStore = create<AppState>()(
             },
           });
         }, 800);
+        return true;
       },
       postDirectMessage: (memberId, text) => {
         if (!get().isPro) return;
@@ -210,7 +220,14 @@ export const useAppStore = create<AppState>()(
     {
       name: 'bu-gece-v1',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
+      version: 2,
+      migrate: (persisted, version) => {
+        const state = persisted as PersistedSlice;
+        if (version < 2 && typeof state.freeMessagesRemaining !== 'number') {
+          return { ...state, freeMessagesRemaining: FREE_MESSAGE_QUOTA };
+        }
+        return state;
+      },
       partialize: (state): PersistedSlice => ({
         onboarded: state.onboarded,
         gender: state.gender,
@@ -222,6 +239,7 @@ export const useAppStore = create<AppState>()(
         roomMessages: state.roomMessages,
         directMessages: state.directMessages,
         topicDayByRoom: state.topicDayByRoom,
+        freeMessagesRemaining: state.freeMessagesRemaining,
       }),
     },
   ),

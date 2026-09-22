@@ -3,7 +3,7 @@ import { Tabs } from 'expo-router/js-tabs';
 import { Text, type ColorValue } from 'react-native';
 
 import { useAppStore } from '@/store/useAppStore';
-import { colors } from '@/theme';
+import { colors, night } from '@/theme';
 
 function TabGlyph({ glyph, color }: { glyph: string; color: ColorValue }) {
   return <Text style={{ color, fontSize: 16 }}>{glyph}</Text>;
@@ -20,10 +20,10 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: colors.elevated,
-          borderTopColor: colors.line,
+          backgroundColor: night.bg,
+          borderTopColor: 'rgba(120, 180, 230, 0.28)',
         },
-        tabBarActiveTintColor: colors.gold,
+        tabBarActiveTintColor: night.glowBright,
         tabBarInactiveTintColor: colors.faint,
       }}
     >

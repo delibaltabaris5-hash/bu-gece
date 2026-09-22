@@ -7,16 +7,22 @@ import { colors, radius, space } from '@/theme';
 export function Screen({
   children,
   bottom = true,
+  backgroundColor,
 }: {
   children: ReactNode;
   bottom?: boolean;
+  backgroundColor?: string;
 }) {
   const insets = useSafeAreaInsets();
   return (
     <View
       style={[
         styles.screen,
-        { paddingTop: insets.top, paddingBottom: bottom ? insets.bottom : 0 },
+        {
+          paddingTop: insets.top,
+          paddingBottom: bottom ? insets.bottom : 0,
+          backgroundColor: backgroundColor ?? colors.bg,
+        },
       ]}
     >
       {children}
