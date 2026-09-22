@@ -5,7 +5,7 @@ import { membersInRoom } from '@/data/members';
 import { ROOMS } from '@/data/rooms';
 import { topicForDay } from '@/data/topics';
 import { useAppStore } from '@/store/useAppStore';
-import { colors, radius, space } from '@/theme';
+import { colors, fontFamily, night, radius, space } from '@/theme';
 import { Screen } from '@/components/ui';
 
 export default function RoomsScreen() {
@@ -65,9 +65,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   title: {
-    color: colors.text,
+    color: night.text,
     fontSize: 34,
-    fontWeight: '700',
+    fontWeight: '600',
+    fontFamily: fontFamily.serif,
   },
   lead: {
     color: colors.muted,

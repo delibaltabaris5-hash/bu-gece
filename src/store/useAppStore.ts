@@ -48,7 +48,8 @@ interface AppState extends PersistedSlice {
   revokePro: () => void;
   ensureDailyTopic: (roomId: RoomId) => void;
   postRoomMessage: (roomId: RoomId, text: string) => boolean;
-  postDirectMessage: (memberId: string, text: string) => void;
+  postDirectMessage: (memberId: string, text: string) => boolean;
+  setMood: (mood: Mood) => void;
   setAtmosphereVolume: (value: number) => void;
 }
 
@@ -186,12 +187,14 @@ export const useAppStore = create<AppState>()(
       setAtmosphereVolume: (value) => {
         set({ atmosphereVolume: clampAtmosphereVolume(value) });
       },
+      setMood: (mood) => set({ mood }),
       postDirectMessage: (memberId, text) => {
-        if (!get().isPro) return;
         const trimmed = text.trim().slice(0, 400);
-        if (!trimmed) return;
+        if (!trimmed) return false;
+        const state = get();
+        if (!state.isPro && state.freeMessagesRemaining <= 0) return false;
         const now = Date.now();
-        const current = get().directMessages[memberId] ?? [];
+        const current = state.directMessages[memberId] ?? [];
         const mine: DirectMessage = {
           id: `dm_self_${memberId}_${now}`,
           memberId,
@@ -200,8 +203,11 @@ export const useAppStore = create<AppState>()(
           createdAt: now,
         };
         set({
+          freeMessagesRemaining: state.isPro
+            ? state.freeMessagesRemaining
+            : state.freeMessagesRemaining - 1,
           directMessages: {
-            ...get().directMessages,
+            ...state.directMessages,
             [memberId]: trimThread([...current, mine]),
           },
         });
@@ -222,6 +228,7 @@ export const useAppStore = create<AppState>()(
             },
           });
         }, 700);
+        return true;
       },
     }),
     {

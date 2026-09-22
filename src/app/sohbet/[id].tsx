@@ -1,4 +1,4 @@
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   FlatList,
@@ -13,28 +13,31 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MessageBubble } from '@/components/MessageBubble';
-import { getMember } from '@/data/members';
+import { SilhouetteBubble } from '@/components/ProfileBubble';
+import { PrimaryButton } from '@/components/ui';
+import { getMember, memberFacingName } from '@/data/members';
 import { getRoom } from '@/data/rooms';
 import { useAppStore } from '@/store/useAppStore';
-import { colors, night, radius, space } from '@/theme';
+import { fontFamily, night, radius, space } from '@/theme';
 import type { DirectMessage, Gender } from '@/types';
 
-export default function DirectScreen() {
+export default function SohbetThreadScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string }>();
   const member = getMember(params.id);
   const isPro = useAppStore((state) => state.isPro);
-  const hydrated = useAppStore((state) => state.hydrated);
   const gender = useAppStore((state) => state.gender);
   const stableNick = useAppStore((state) => state.stableNick);
+  const tempNick = useAppStore((state) => state.tempNick);
+  const remaining = useAppStore((state) => state.freeMessagesRemaining);
   const thread = useAppStore((state) => (member ? state.directMessages[member.id] : undefined));
   const postDirectMessage = useAppStore((state) => state.postDirectMessage);
   const [draft, setDraft] = useState('');
 
   const data = useMemo(() => [...(thread ?? [])].reverse(), [thread]);
+  const quotaBlocked = !isPro && remaining <= 0;
 
-  if (hydrated && !isPro) return <Redirect href="/pro" />;
   if (!member) {
     return (
       <View style={styles.missing}>
@@ -45,6 +48,8 @@ export default function DirectScreen() {
 
   const room = getRoom(member.roomId);
   const selfGender: Gender = gender ?? 'kadin';
+  const label = memberFacingName(member, isPro);
+  const selfName = isPro ? stableNick || 'Sen' : tempNick || 'Sen';
 
   const renderItem = ({ item }: { item: DirectMessage }) => {
     const mine = item.from === 'self';
@@ -52,7 +57,7 @@ export default function DirectScreen() {
       <MessageBubble
         mine={mine}
         gender={mine ? selfGender : member.gender}
-        name={mine ? stableNick || 'Sen' : member.stableNick}
+        name={mine ? selfName : label}
         text={item.text}
         createdAt={item.createdAt}
       />
@@ -60,8 +65,9 @@ export default function DirectScreen() {
   };
 
   const send = () => {
-    postDirectMessage(member.id, draft);
-    setDraft('');
+    if (quotaBlocked) return;
+    const sent = postDirectMessage(member.id, draft);
+    if (sent) setDraft('');
   };
 
   return (
@@ -73,15 +79,21 @@ export default function DirectScreen() {
         <Pressable accessibilityRole="button" accessibilityLabel="Geri" onPress={() => router.back()}>
           <Text style={styles.back}>Geri</Text>
         </Pressable>
+        <SilhouetteBubble diameter={42} />
         <View style={styles.headerCopy}>
-          <Text style={styles.title}>{member.stableNick}</Text>
-          <Text style={styles.subtitle}>Doğrudan mesaj · {room?.name}</Text>
+          <Text style={styles.title}>{label}</Text>
+          <Text style={styles.subtitle}>
+            {isPro ? `${room?.name ?? 'Sohbet'} · ${member.bio}` : 'Ücretsiz · simge ve geçici numara'}
+          </Text>
         </View>
       </View>
+
       {data.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>
-            İlk cümleyi konu üzerinden bırak. Bu kanal, odadaki bir kişiyle yazışma.
+            {isPro
+              ? 'İlk cümleyi sen bırak. Konum paylaşılmaz.'
+              : `Ücretsiz: ${Math.max(0, remaining)} mesaj kaldı. Simge ve geçici numara.`}
           </Text>
         </View>
       ) : (
@@ -95,27 +107,43 @@ export default function DirectScreen() {
           keyboardShouldPersistTaps="handled"
         />
       )}
-      <View style={[styles.composer, { paddingBottom: 10 }]}>
-        <View style={styles.composerRow}>
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="Doğrudan bir cümle"
-            placeholderTextColor={colors.faint}
-            style={styles.input}
-            maxLength={400}
-            multiline
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Gönder"
-            disabled={!draft.trim()}
-            onPress={send}
-            style={[styles.send, !draft.trim() && styles.sendOff]}
-          >
-            <Text style={styles.sendLabel}>Gönder</Text>
-          </Pressable>
-        </View>
+
+      <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        {quotaBlocked ? (
+          <View style={styles.paywall}>
+            <Text style={styles.payTitle}>Ücretsiz mesaj hakkın doldu</Text>
+            <Text style={styles.payBody}>Pro sınırsız yazar ve sabit adı açar.</Text>
+            <PrimaryButton label="Pro’yu aç" onPress={() => router.push('/pro')} />
+          </View>
+        ) : (
+          <>
+            <Text style={styles.hint}>
+              {isPro
+                ? 'Pro: sabit ad açık. Sınırsız mesaj.'
+                : `Ücretsiz: ${remaining} mesaj kaldı. Oda ve sohbet aynı hakkı kullanır.`}
+            </Text>
+            <View style={styles.composerRow}>
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="Bir cümle bırak"
+                placeholderTextColor={night.muted}
+                style={styles.input}
+                maxLength={400}
+                multiline
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Gönder"
+                disabled={!draft.trim()}
+                onPress={send}
+                style={[styles.send, !draft.trim() && styles.sendOff]}
+              >
+                <Text style={styles.sendLabel}>Gönder</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -124,40 +152,44 @@ export default function DirectScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: night.bg,
   },
   missing: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: night.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   missingText: {
-    color: colors.text,
+    color: night.text,
+    fontSize: 16,
   },
   header: {
     paddingHorizontal: space.lg,
-    paddingBottom: 8,
+    paddingBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   back: {
-    color: colors.gold,
-    fontWeight: '700',
+    color: night.glowBright,
     fontSize: 16,
+    fontWeight: '700',
   },
   headerCopy: {
     flex: 1,
+    gap: 2,
   },
   title: {
-    color: colors.text,
+    color: night.text,
+    fontFamily: fontFamily.serif,
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   subtitle: {
-    color: colors.muted,
-    fontSize: 13,
+    color: night.muted,
+    fontSize: 12,
+    lineHeight: 16,
   },
   empty: {
     flex: 1,
@@ -165,9 +197,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyText: {
-    color: colors.muted,
+    color: night.muted,
     fontSize: 16,
     lineHeight: 23,
+    textAlign: 'center',
   },
   list: {
     flex: 1,
@@ -178,10 +211,16 @@ const styles = StyleSheet.create({
   },
   composer: {
     borderTopWidth: 1,
-    borderTopColor: colors.line,
-    backgroundColor: colors.elevated,
+    borderTopColor: night.glassLine,
+    backgroundColor: 'rgba(8, 16, 28, 0.94)',
     paddingHorizontal: space.lg,
     paddingTop: 10,
+    gap: 8,
+  },
+  hint: {
+    color: night.muted,
+    fontSize: 12,
+    lineHeight: 16,
   },
   composerRow: {
     flexDirection: 'row',
@@ -192,9 +231,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 44,
     maxHeight: 120,
-    color: colors.text,
-    backgroundColor: colors.card,
+    color: night.text,
+    backgroundColor: '#101C2A',
     borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: night.glassLine,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
@@ -211,7 +252,21 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   sendLabel: {
-    color: colors.ink,
+    color: '#FFFFFF',
     fontWeight: '700',
+  },
+  paywall: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  payTitle: {
+    color: night.text,
+    fontFamily: fontFamily.serif,
+    fontSize: 20,
+  },
+  payBody: {
+    color: night.muted,
+    fontSize: 14,
+    lineHeight: 20,
   },
 });

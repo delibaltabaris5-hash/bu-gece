@@ -5,16 +5,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton, SecondaryButton } from '@/components/ui';
 import { useAppStore } from '@/store/useAppStore';
-import { colors, radius, space } from '@/theme';
+import { colors, fontFamily, night, radius, space } from '@/theme';
 
 const ROWS = [
   {
     title: 'Ücretsiz',
-    body: 'Cinsiyet simgesi, geçici numara ve 1–2 oda mesajı. Doğrudan mesaj kapalı.',
+    body: 'Cinsiyet simgesi, geçici numara ve 1–2 mesaj. Hak bitince Sohbetler Pro kilidini gösterir.',
   },
   {
     title: 'Pro',
-    body: 'Sabit takma ad, kısa tanıtım ve odadaki bir kişiye doğrudan mesaj.',
+    body: 'Sabit takma ad, kısa tanıtım ve sınırsız mesaj.',
   },
 ];
 
@@ -41,7 +41,7 @@ export default function ProScreen() {
         <Text style={styles.kicker}>Pro</Text>
         <Text style={styles.title}>Sabit ad ve doğrudan mesaj</Text>
         <Text style={styles.body}>
-          Konum takibi yok. Pro, odadaki kişilerin sabit adını görmeni ve onlara konu üzerinden yazmanı açar.
+          Konum takibi yok. Pro, sabit adı açar ve oda ile Sohbetler mesajını sınırsız yapar.
         </Text>
         {ROWS.map((row) => (
           <View key={row.title} style={styles.card}>
@@ -100,10 +100,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   title: {
-    color: colors.text,
+    color: night.text,
     fontSize: 32,
     lineHeight: 38,
-    fontWeight: '700',
+    fontWeight: '600',
+    fontFamily: fontFamily.serif,
   },
   body: {
     color: colors.muted,

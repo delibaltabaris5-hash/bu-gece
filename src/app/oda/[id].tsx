@@ -19,7 +19,7 @@ import { getRoom } from '@/data/rooms';
 import { topicForDay } from '@/data/topics';
 import { memberTempNick, tempNickInRoom } from '@/lib/identity';
 import { useAppStore } from '@/store/useAppStore';
-import { colors, radius, space } from '@/theme';
+import { colors, night, radius, space } from '@/theme';
 import type { ChatMessage, Gender } from '@/types';
 
 export default function RoomScreen() {
@@ -221,10 +221,10 @@ const styles = StyleSheet.create({
   pin: {
     marginHorizontal: space.lg,
     marginBottom: 8,
-    backgroundColor: '#241F16',
+    backgroundColor: night.glass,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#4A3D22',
+    borderColor: night.glassLine,
     padding: 12,
     gap: 4,
   },
@@ -275,8 +275,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   send: {
-    backgroundColor: colors.gold,
-    borderRadius: radius.md,
+    backgroundColor: night.fill,
+    borderRadius: 999,
     minHeight: 44,
     paddingHorizontal: 14,
     alignItems: 'center',

@@ -38,6 +38,8 @@ export interface Member {
   stableNick: string;
   bio: string;
   city: string;
+  /** Today's tempo. Sohbetler → Ruh Hali matches on this, not on location. */
+  mood: Mood;
 }
 
 export interface NightPlan {

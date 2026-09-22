@@ -6,7 +6,7 @@ import { Pill, PrimaryButton, Screen, SecondaryButton } from '@/components/ui';
 import { getRoom } from '@/data/rooms';
 import { MOODS, genderLabel, labelOf } from '@/labels';
 import { useAppStore } from '@/store/useAppStore';
-import { colors, radius, space } from '@/theme';
+import { colors, fontFamily, night, radius, space } from '@/theme';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -66,11 +66,11 @@ export default function SettingsScreen() {
             <Pill label={isPro ? 'Pro' : 'Ücretsiz'} tone={isPro ? 'gold' : 'muted'} />
           </View>
           <Text style={styles.body}>
-            Ücretsiz planda odadaki kişiler simge ve geçici numarayla görünür. Odaya 1–2 mesaj yazılır
-            {isPro ? ' (Pro ile sınırsız).' : ` (${Math.max(0, freeMessagesRemaining)} kaldı).`} Doğrudan mesaj kapalıdır.
+            Ücretsiz planda kişiler simge ve geçici numarayla görünür. Oda ve Sohbetler aynı 1–2 mesajı paylaşır
+            {isPro ? ' (Pro ile sınırsız).' : ` (${Math.max(0, freeMessagesRemaining)} kaldı).`}
           </Text>
           <Text style={styles.body}>
-            Pro, sabit takma adı, kısa tanıtımı ve doğrudan mesajı açar. Bu sürümde kilit yerel bir denemedir.
+            Pro, sabit takma adı, kısa tanıtımı ve sınırsız mesajı açar. Bu sürümde kilit yerel bir denemedir.
           </Text>
           {isPro ? (
             <SecondaryButton label="Pro’yu kapat" onPress={revokePro} />
@@ -103,9 +103,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   title: {
-    color: colors.text,
+    color: night.text,
     fontSize: 34,
-    fontWeight: '700',
+    fontWeight: '600',
+    fontFamily: fontFamily.serif,
   },
   card: {
     backgroundColor: colors.card,

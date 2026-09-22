@@ -59,6 +59,7 @@ export default function RootLayout() {
               <Stack.Screen name="oda/[id]" />
               <Stack.Screen name="uye/[id]" />
               <Stack.Screen name="dm/[id]" />
+              <Stack.Screen name="sohbet/[id]" />
               <Stack.Screen
                 name="pro"
                 options={{ presentation: 'modal', animation: 'slide_from_bottom' }}

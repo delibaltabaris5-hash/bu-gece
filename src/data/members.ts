@@ -1,4 +1,6 @@
-import type { Gender, Member, RoomId } from '@/types';
+import { memberTempNick } from '@/lib/identity';
+import { getRoom } from '@/data/rooms';
+import type { Gender, Member, Mood, RoomId } from '@/types';
 
 interface MemberSeed {
   id: string;
@@ -69,7 +71,12 @@ const SEEDS: MemberSeed[] = [
   city,
 }));
 
-export const MEMBERS: Member[] = SEEDS;
+const MOOD_CYCLE: Mood[] = ['sakin', 'merakli', 'sosyal', 'derin', 'neseli'];
+
+export const MEMBERS: Member[] = SEEDS.map((seed, index) => ({
+  ...seed,
+  mood: MOOD_CYCLE[index % MOOD_CYCLE.length] ?? 'sakin',
+}));
 
 const byId = new Map(MEMBERS.map((member) => [member.id, member]));
 
@@ -80,4 +87,16 @@ export function getMember(id: string | undefined): Member | undefined {
 
 export function membersInRoom(roomId: RoomId): Member[] {
   return MEMBERS.filter((member) => member.roomId === roomId);
+}
+
+export function membersWithMood(mood: Mood): Member[] {
+  return MEMBERS.filter((member) => member.mood === mood);
+}
+
+/** Pro sees the stable nick. Free sees a temporary number, never a location. */
+export function memberFacingName(member: Member, isPro: boolean): string {
+  if (isPro) return member.stableNick;
+  const roomName = getRoom(member.roomId)?.name ?? 'Gece';
+  const number = memberTempNick(roomName, member.id).split('_').pop() ?? '0000';
+  return `#${number}`;
 }
