@@ -11,11 +11,48 @@ npm install
 npx expo start
 ```
 
-- Android emülatör: terminalde `a`
-- Web: terminalde `w`
-- Telefonda Expo Go: SDK 57 ile eşleşen Expo Go sürümü gerekir. Mağaza sürümü gerideyse [expo.dev/go](https://expo.dev/go) üzerinden aynı SDK’yı kur.
+Uygulama adı: **Bu Gece**. Arayüz Türkçedir. Proje Expo SDK 57 kullanır.
 
-Uygulama adı: **Bu Gece**. Arayüz Türkçedir.
+### Expo Go (Android)
+
+Expo hesabı gerekmez. Telefon ve bilgisayar aynı ağda olmalıdır.
+
+1. Android telefona Expo Go kur. Sürüm bu projeyle aynı SDK’yı konuşmalıdır (SDK 57). Play Store gerideyse [expo.dev/go](https://expo.dev/go) üzerinden SDK 57 paketini indir.
+2. Bilgisayarda `npm install` ardından `npx expo start`.
+3. Terminaldeki QR kodu Expo Go ile okut. Bağlantı koparsa `npx expo start --tunnel` dene.
+4. Android emülatör açıksa terminalde `a`.
+
+Web için terminalde `w`.
+
+### Kurulabilir APK
+
+`eas build` Expo hesabı ister. Bu depoyu hazırlayan ortamda `npx expo whoami` sonucu `Not logged in` ve `EXPO_TOKEN` yoktu, bu yüzden bulut APK’sı burada üretilmedi.
+
+Sahip makinesinde, etkileşimli girişle:
+
+```bash
+npm install
+npx eas-cli login
+npx eas-cli build -p android --profile preview
+```
+
+Etkileşimsiz (Expo erişim belirteci, [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens)):
+
+```bash
+export EXPO_TOKEN=...
+npx eas-cli build -p android --profile preview --non-interactive
+```
+
+`eas.json` içindeki `preview` profili iç dağıtım APK’sı ister (`android.buildType: apk`). Bittiğinde Expo’nun verdiği bağlantıdan APK indirilir. `npx expo export --platform android` yalnızca JavaScript paketidir; telefona kurulan APK değildir.
+
+Expo hesabı olmadan yerel debug APK (Android SDK 36, build-tools 36.0.0, NDK 27.1.12297006):
+
+```bash
+npx expo prebuild -p android --no-install
+cd android && ./gradlew assembleDebug
+```
+
+Çıktı: `android/app/build/outputs/apk/debug/app-debug.apk`. `android/` git’e girmez.
 
 ## Akış
 
