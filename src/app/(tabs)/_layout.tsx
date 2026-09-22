@@ -1,0 +1,53 @@
+import { Redirect } from 'expo-router';
+import { Tabs } from 'expo-router/js-tabs';
+import { Text, type ColorValue } from 'react-native';
+
+import { useAppStore } from '@/store/useAppStore';
+import { colors } from '@/theme';
+
+function TabGlyph({ glyph, color }: { glyph: string; color: ColorValue }) {
+  return <Text style={{ color, fontSize: 16 }}>{glyph}</Text>;
+}
+
+export default function TabLayout() {
+  const hydrated = useAppStore((state) => state.hydrated);
+  const onboarded = useAppStore((state) => state.onboarded);
+
+  if (hydrated && !onboarded) return <Redirect href="/onboarding" />;
+
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: colors.elevated,
+          borderTopColor: colors.line,
+        },
+        tabBarActiveTintColor: colors.gold,
+        tabBarInactiveTintColor: colors.faint,
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Bu Gece',
+          tabBarIcon: ({ color }) => <TabGlyph glyph="✶" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="odalar"
+        options={{
+          title: 'Odalar',
+          tabBarIcon: ({ color }) => <TabGlyph glyph="▣" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="ayarlar"
+        options={{
+          title: 'Ayarlar',
+          tabBarIcon: ({ color }) => <TabGlyph glyph="⚙" color={color} />,
+        }}
+      />
+    </Tabs>
+  );
+}
