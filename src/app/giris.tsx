@@ -182,6 +182,7 @@ export default function LoginScreen() {
                 disabled={busy}
                 onProfile={(profile) => void google(profile)}
                 onMessage={setError}
+                onNeedEmail={() => setPanel('kayit')}
               />
             </View>
             <Text style={styles.memberLine}>
@@ -280,6 +281,7 @@ export default function LoginScreen() {
               disabled={busy}
               onProfile={(profile) => void google(profile)}
               onMessage={setError}
+              onNeedEmail={() => setPanel('kayit')}
             />
           </ScrollView>
           <AtmosphereSlider />

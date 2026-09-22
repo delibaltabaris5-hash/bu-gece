@@ -95,15 +95,23 @@ Tam koruma için kota sunucuda tutulmalı ve hesap Apple, Google veya telefon nu
 
 İlk açılışta kilitli giriş ekranı gelir: **Bu Gece**, **Hesabınla devam et.**, üstte **Kayıt ol**, altta **Gmail ile devam et**, altında **Zaten üye misin? Giriş yap.** **Kayıt ol** e-posta ve şifreyle yeni hesabı 10 mesajla açar; görünen ad isteğe bağlıdır. **Giriş yap** yalnızca kayıtlı hesabı açar ve SecureStore’daki kalan mesajı geri getirir. Aynı e-posta ile yeniden giriş hakkı 10’a döndürmez.
 
-**Gmail ile devam et** giriş ekranında, e-posta kayıt formunda ve e-posta giriş formunda durur. Düğme `expo-auth-session` içindeki `Google.useAuthRequest` ile Google oturumunu açar. Yeni bir Gmail adresi 10 mesajla hesap olur. Daha önce e-posta ile açılmış aynı adres, kayıtlı sayıyı geri getirir; hak sıfırlanmaz. Şifresi olmayan Gmail hesabı e-posta formuyla açılmaz.
+**Gmail ile devam et** giriş, kayıt ve e-posta ekranlarındadır. İstek `Google.useAuthRequest` ile gider. Yönlendirme `AuthSession.makeRedirectUri({ scheme: 'bugece', path: 'giris', projectNameForProxy: 'bu-gece' })` ile hesaplanır. SDK 57 bu çağrıda `projectNameForProxy` alanını yok sayar ve `exp://` veya `bugece://` döndürür. Google web istemcisi bu özel şemayı `Error 400: invalid_request` ile keser. Uygulama o sonucu kullanmaz. Google’a giden adres, web istemcisinde kayıtlı olanlardan biridir:
 
-Expo yalnızca `EXPO_PUBLIC_` ile başlayan değişkenleri uygulamaya koyar. Kabukta duran `GOOGLE_CLIENT_ID` tek başına işe yaramaz. Gerçek Google Cloud OAuth istemci kimlikleri şunlardır (depoya yazılmaz, örnek `.env.example`):
+- Expo Go ve yerel olmayan çalışma: `https://auth.expo.io/@anonymous/bu-gece`
+- Web, port 8081: `http://localhost:8081`
+- Diğer kayıtlı kökler: `https://localhost`, `http://localhost`, `http://127.0.0.1`, `https://127.0.0.1`
 
-- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` — web istemci kimliği. `EXPO_PUBLIC_GOOGLE_CLIENT_ID` aynı işi görür. Google Cloud’da JavaScript kaynağı ve yönlendirme adresi olarak sitenin kökünü ekle (`Linking.createURL('giris', { scheme: 'bugece' })`).
-- `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` — iOS istemci kimliği. Paket `com.bugece.app`.
-- `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` — Android istemci kimliği. Paket `com.bugece.app` ve imza SHA-1.
+Konsolda `[bu-gece] Google redirectUri` satırı, o çalıştırmada kullanılan adresi yazar. İstek yetkilendirme kodu + PKCE kullanır (`response_type=code`) ve web istemci kimliğini gönderir, çünkü yönlendirme adresleri o istemciye ekli. Yeni bir Gmail adresi 10 mesajla hesap olur. Aynı e-posta kayıtlı sayıyı geri getirir. Google bitmezse Türkçe açıklama çıkar ve e-posta kayıt formu açılır.
 
-Kimlik yokken düğme aynı beyaz hap olarak durur. Basılınca hangi değişkenin eksik olduğunu yazar ve hesap açmaz. Kimlik doluysa düğme Google oturumunu açar. Ayarlar’da **Giriş yap**, **Hesabım** ve **Çıkış yap** durur. Yazmak üye hesabı ister.
+Expo yalnızca `EXPO_PUBLIC_` ile başlayan değişkenleri uygulamaya koyar.
+
+- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` — `746154431428-mctmvk4glj7gi8as42qk4ekaogqlmr3e.apps.googleusercontent.com`
+- `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` — `746154431428-fto2dpgtmg73hjdisk62loh8utsuucr5.apps.googleusercontent.com` (paket `com.bugece.app`). Mağaza derlemesinde ters istemci şeması `com.googleusercontent.apps.746154431428-fto2dpgtmg73hjdisk62loh8utsuucr5`. Bu HTTPS yönlendirme web istemcisine kayıtlı olduğu için Expo Go isteği web istemci kimliğini kullanır.
+- `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` — Android istemcisi. Paket `com.bugece.app` ve yayın SHA-1’i.
+
+OAuth izin ekranı şu an **External / Testing**. Test kullanıcıları: `canaslan1675@gmail.com`, `dekancelik501@gmail.com`. Testing modu yalnızca bu listedekileri alır. Tüm son kullanıcılar için izin ekranı **In production** yayımlanmalıdır.
+
+Ayarlar’da **Giriş yap**, **Hesabım** ve **Çıkış yap** durur. Yazmak üye hesabı ister.
 
 ## Atmosfer
 

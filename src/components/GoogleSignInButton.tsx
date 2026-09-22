@@ -1,15 +1,17 @@
+import { ResponseType } from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Image, Pressable, StyleSheet, Text } from 'react-native';
 
 import type { AuthSessionResult } from 'expo-auth-session';
 
 import {
+  exchangeGoogleCode,
   fetchGoogleProfile,
-  GOOGLE_REDIRECT,
-  googleClientIds,
+  GOOGLE_AUTH_FAILED,
   googleConfigMessage,
-  isGoogleAuthConfigured,
+  resolveGoogleAuth,
+  type GoogleAuthSetup,
 } from '@/lib/googleAuth';
 import { fontFamily } from '@/theme';
 
@@ -19,56 +21,94 @@ type Props = {
   disabled?: boolean;
   onProfile: (profile: Profile) => void;
   onMessage: (message: string) => void;
+  /** Opens the email register form when Google cannot finish. */
+  onNeedEmail?: () => void;
 };
 
 export function GoogleSignInButton(props: Props) {
-  if (!isGoogleAuthConfigured()) {
+  const setup = useMemo(() => resolveGoogleAuth(), []);
+  if (!setup) {
     return (
       <GmailPill
         disabled={props.disabled}
-        onPress={() => props.onMessage(googleConfigMessage())}
+        onPress={() => {
+          props.onMessage(googleConfigMessage());
+          props.onNeedEmail?.();
+        }}
       />
     );
   }
-  return <ConfiguredGoogleButton {...props} />;
+  if (!setup.canPrompt) {
+    return (
+      <GmailPill
+        disabled={props.disabled}
+        onPress={() => {
+          props.onMessage(setup.blockedReason);
+          props.onNeedEmail?.();
+        }}
+      />
+    );
+  }
+  return <ConfiguredGoogleButton {...props} setup={setup} />;
 }
 
-function ConfiguredGoogleButton({ disabled, onProfile, onMessage }: Props) {
-  const ids = googleClientIds();
-  const webClientId = ids.web || ids.ios || ids.android;
-  const [request, response, promptAsync] = Google.useAuthRequest(
-    {
-      clientId: webClientId,
-      webClientId,
-      iosClientId: ids.ios || ids.web,
-      androidClientId: ids.android || ids.web,
-      scopes: ['openid', 'profile', 'email'],
-      selectAccount: true,
-    },
-    GOOGLE_REDIRECT,
-  );
+function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail, setup }: Props & { setup: GoogleAuthSetup }) {
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: setup.clientId,
+    webClientId: setup.webClientId,
+    iosClientId: setup.iosClientId,
+    androidClientId: setup.androidClientId,
+    redirectUri: setup.redirectUri,
+    responseType: ResponseType.Code,
+    usePKCE: true,
+    shouldAutoExchangeCode: false,
+    scopes: ['openid', 'profile', 'email'],
+    selectAccount: true,
+  });
   const onProfileRef = useRef(onProfile);
   const onMessageRef = useRef(onMessage);
+  const onNeedEmailRef = useRef(onNeedEmail);
   onProfileRef.current = onProfile;
   onMessageRef.current = onMessage;
+  onNeedEmailRef.current = onNeedEmail;
   const handled = useRef('');
+  const requestRef = useRef(request);
+  requestRef.current = request;
+
+  const fail = () => {
+    onMessageRef.current(GOOGLE_AUTH_FAILED);
+    onNeedEmailRef.current?.();
+  };
 
   const consume = async (result: AuthSessionResult | null) => {
-    if (!result || result.type !== 'success') {
-      if (result?.type === 'error') {
-        onMessageRef.current('Google girişi tamamlanamadı. Yönlendirme adresini ve istemci kimliğini kontrol et.');
-      }
+    if (!result || result.type === 'cancel' || result.type === 'dismiss' || result.type === 'opened') return;
+    if (result.type !== 'success') {
+      fail();
       return;
     }
-    const access = result.authentication?.accessToken || result.params.access_token || '';
-    const idToken = result.authentication?.idToken || result.params.id_token || '';
-    if (!access && !idToken) return;
-    const key = `${access}:${idToken}`;
-    if (handled.current === key) return;
+    let access = result.authentication?.accessToken || result.params.access_token || '';
+    let idToken = result.authentication?.idToken || result.params.id_token || '';
+    const code = result.params.code || '';
+    const key = code || access || idToken;
+    if (!key || handled.current === key) return;
     handled.current = key;
+    if (!access && !idToken && code) {
+      const exchanged = await exchangeGoogleCode({
+        clientId: setup.clientId,
+        code,
+        redirectUri: setup.redirectUri,
+        codeVerifier: requestRef.current?.codeVerifier ?? '',
+      });
+      if (!exchanged) {
+        fail();
+        return;
+      }
+      access = exchanged.accessToken;
+      idToken = exchanged.idToken;
+    }
     const profile = await fetchGoogleProfile(access, idToken);
     if (!profile) {
-      onMessageRef.current('Google hesabından e-posta alınamadı.');
+      fail();
       return;
     }
     onProfileRef.current(profile);
@@ -81,13 +121,14 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage }: Props) {
   const press = async () => {
     if (disabled) return;
     if (!request) {
-      onMessage('Google oturumu hazır değil. Biraz sonra tekrar dene.');
+      onMessage('Google oturumu hazır değil. Biraz sonra tekrar dene, ya da e-posta ile kayıt ol.');
+      onNeedEmail?.();
       return;
     }
     try {
       await consume(await promptAsync());
     } catch {
-      onMessage('Google girişi açılamadı. İstemci kimliğini kontrol et.');
+      fail();
     }
   };
 
