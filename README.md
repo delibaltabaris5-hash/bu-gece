@@ -93,7 +93,15 @@ Tam koruma için kota sunucuda tutulmalı ve hesap Apple, Google veya telefon nu
 
 ### Üye girişi
 
-İlk açılışta **Üye girişi** gelir. **Kayıt ol** yeni e-postayı 10 mesajla açar; görünen ad isteğe bağlıdır. **Giriş yap** yalnızca kayıtlı hesabı açar ve SecureStore’daki kalan mesajı geri getirir. Aynı e-posta ile yeniden giriş hakkı 10’a döndürmez. **Misafir olarak devam et** odaları gezdirir; yazmak giriş ister. E-posta kaydı ile **Gmail ile devam et** aynı ekranda alt alta durur. Bu kurulumda Google istemcisi olmadığı için Gmail düğmesi görünür ve durumu yazar; giriş açmaz. Apple satırı yakındadır. Ayarlar’da **Giriş yap**, **Hesabım** ve **Çıkış yap** durur.
+İlk açılışta kilitli giriş ekranı gelir: **Bu Gece**, **Hesabınla devam et.**, üstte **Kayıt ol**, altta **Gmail ile devam et**, altında **Zaten üye misin? Giriş yap.** **Kayıt ol** e-posta ve şifreyle yeni hesabı 10 mesajla açar; görünen ad isteğe bağlıdır. **Giriş yap** yalnızca kayıtlı hesabı açar ve SecureStore’daki kalan mesajı geri getirir. Aynı e-posta ile yeniden giriş hakkı 10’a döndürmez.
+
+**Gmail ile devam et** `expo-auth-session` Google sağlayıcısını açar. Yeni bir Gmail adresi 10 mesajla hesap olur. Daha önce e-posta ile açılmış aynı adres, kayıtlı sayıyı geri getirir; hak sıfırlanmaz. Şifresi olmayan Gmail hesabı e-posta formuyla açılmaz. İstemci kimlikleri ortam değişkenidir; depoya yazılmaz:
+
+- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` — Expo web. Google Cloud’da JavaScript kaynağı ve yönlendirme adresi olarak sitenin kökünü ekle (`Linking.createURL('giris', { scheme: 'bugece' })`).
+- `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` — paket `com.bugece.app`.
+- `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` — paket `com.bugece.app` ve imza SHA-1.
+
+Kimlik yokken düğme aynı beyaz hap olarak durur. Basılınca hangi değişkenin doldurulacağını yazar; giriş açmaz. Örnek: `.env.example`. Ayarlar’da **Giriş yap**, **Hesabım** ve **Çıkış yap** durur. Yazmak üye hesabı ister.
 
 ## Atmosfer
 

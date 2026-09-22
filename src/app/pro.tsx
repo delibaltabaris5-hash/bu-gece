@@ -76,7 +76,7 @@ export default function ProScreen() {
         )}
         {note ? <Text style={styles.note}>{note}</Text> : null}
         <Text style={styles.footnote}>
-          Google Play Billing bu sürümde bağlı değil. “Pro’yu aç” yerel bir deneme kilididir ve bu hesaba yazılır. Apple ve Google girişi yakında.
+          Google Play Billing bu sürümde bağlı değil. “Pro’yu aç” yerel bir deneme kilididir ve bu hesaba yazılır.
         </Text>
       </ScrollView>
     </View>

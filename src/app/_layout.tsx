@@ -9,13 +9,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AtmosphereControl } from '@/components/AtmosphereControl';
 import { AtmosphereHost } from '@/hooks/useAtmosphere';
+import '@/lib/googleAuth';
 import { reconcileSecureQuota, watchSecureQuotaAfterHydration } from '@/lib/secureQuota';
 import { useAppStore } from '@/store/useAppStore';
 import { colors, night } from '@/theme';
 
 function AtmosphereChrome() {
   const segments = useSegments();
-  if (segments[0] === '(tabs)') return null;
+  if (segments[0] === '(tabs)' || segments[0] === 'giris') return null;
   return <AtmosphereControl />;
 }
 

@@ -9,6 +9,8 @@ export type MemberAccount = {
   email: string;
   displayName: string;
   passwordHash: string;
+  /** Missing on older password accounts. Google-only accounts have no password. */
+  provider?: 'password' | 'google';
   freeMessagesRemaining: number;
   isPro: boolean;
 };
@@ -98,6 +100,9 @@ export async function signInWithPassword(emailInput: string, password: string): 
 
   const existing = book.accounts[checked.email];
   if (!existing) return { ok: false, message: 'Bu e-posta kayıtlı değil. Kayıt ol.' };
+  if (existing.provider === 'google' || !existing.passwordHash) {
+    return { ok: false, message: 'Bu hesap Gmail ile açıldı. Gmail ile devam et.' };
+  }
   const passwordHash = await hashPassword(checked.email, password);
   if (existing.passwordHash !== passwordHash) return { ok: false, message: 'Şifre uyuşmadı.' };
   await writeSessionAccountId(checked.email);
@@ -124,6 +129,7 @@ export async function registerAccount(
     email: checked.email,
     displayName: displayNameInput.trim().slice(0, 32),
     passwordHash: await hashPassword(checked.email, password),
+    provider: 'password',
     freeMessagesRemaining: FREE_MESSAGE_QUOTA,
     isPro: false,
   };
@@ -131,6 +137,46 @@ export async function registerAccount(
   const wrote = await writeAccountBook(book);
   if (!wrote) return { ok: false, message: 'Hesap kaydedilemedi. Tekrar dene.' };
   await writeSessionAccountId(checked.email);
+  return { ok: true, account };
+}
+
+/**
+ * Same email as a password account restores that stored remaining count.
+ * A new Google email starts at the free quota and does not refill an existing one.
+ */
+export async function signInWithGoogle(emailInput: string, displayNameInput = ''): Promise<AuthResult> {
+  const email = normalizeEmail(emailInput);
+  if (!email) return { ok: false, message: 'Google hesabından e-posta alınamadı.' };
+
+  const book = await readAccountBook();
+  if (!book) return { ok: false, message: 'Hesaplar okunamadı. Tekrar dene.' };
+
+  const existing = book.accounts[email];
+  if (existing) {
+    const account = withDisplayName(existing);
+    const incoming = displayNameInput.trim().slice(0, 32);
+    if (!account.displayName && incoming) {
+      account.displayName = incoming;
+      book.accounts[email] = account;
+      await writeAccountBook(book);
+    }
+    await writeSessionAccountId(email);
+    return { ok: true, account };
+  }
+
+  const account: MemberAccount = {
+    accountId: email,
+    email,
+    displayName: displayNameInput.trim().slice(0, 32),
+    passwordHash: '',
+    provider: 'google',
+    freeMessagesRemaining: FREE_MESSAGE_QUOTA,
+    isPro: false,
+  };
+  book.accounts[email] = account;
+  const wrote = await writeAccountBook(book);
+  if (!wrote) return { ok: false, message: 'Hesap kaydedilemedi. Tekrar dene.' };
+  await writeSessionAccountId(email);
   return { ok: true, account };
 }
 
