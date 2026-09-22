@@ -84,7 +84,11 @@ export default function SohbetlerScreen() {
                 <Text style={styles.payStripCta}>Pro’yu aç</Text>
               </Pressable>
             ) : null}
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
               <View
                 style={[styles.field, { height: Math.max(sky.height, 280) }]}
                 onLayout={(event) => {
@@ -271,17 +275,21 @@ function LinkLine({ x1, y1, x2, y2 }: { x1: number; y1: number; x2: number; y2: 
   const dx = x2 - x1;
   const dy = y2 - y1;
   const length = Math.hypot(dx, dy);
-  const angle = `${Math.atan2(dy, dx)}rad`;
+  const angle = `${(Math.atan2(dy, dx) * 180) / Math.PI}deg`;
+  const cx = (x1 + x2) / 2;
+  const cy = (y1 + y2) / 2;
   return (
     <View
       pointerEvents="none"
       style={{
         position: 'absolute',
-        left: (x1 + x2) / 2 - length / 2,
-        top: (y1 + y2) / 2,
+        left: cx - length / 2,
+        top: cy - 1,
         width: length,
-        height: 1,
-        backgroundColor: 'rgba(143, 212, 255, 0.55)',
+        height: 2,
+        borderRadius: 1,
+        backgroundColor: '#8FD4FF',
+        opacity: 0.9,
         transform: [{ rotate: angle }],
       }}
     />
