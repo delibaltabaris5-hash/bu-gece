@@ -33,7 +33,7 @@ export default function ProScreen() {
   };
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 12 }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + 8, paddingBottom: 12 }]}>
       <Pressable accessibilityRole="button" accessibilityLabel="Kapat" onPress={() => router.back()}>
         <Text style={styles.back}>Kapat</Text>
       </Pressable>

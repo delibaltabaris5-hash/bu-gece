@@ -1,74 +1,86 @@
-import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
-import { useEffect, useState } from 'react';
+import { setAudioModeAsync, useAudioPlayer, type AudioPlayer } from 'expo-audio';
+import { useEffect } from 'react';
+
+import { clampAtmosphereVolume } from '@/lib/atmosphere';
+import { useAppStore } from '@/store/useAppStore';
 
 /**
- * Atmosfer soft-loop for the chat room.
+ * App-wide Atmosfer loop: Echoes of Solitude (Discomfuse), Pixabay Content License.
+ * https://pixabay.com/music/main-title-echoes-of-solitude-277006/
  *
- * The design intent was a quiet, pre-crescendo loop of Hans Zimmer’s
- * “Can You Hear the Music”. That recording is copyrighted and is not shipped.
- * `assets/audio/soft-loop.wav` is an original quiet sine pad (no crescendo)
- * used as a placeholder until a licensed loop replaces it.
- *
- * Expo SDK 57’s Expo Go client does not bundle expo-av (see
- * `bundledNativeModules.json`, which ships expo-audio). The behavior below is
- * the expo-av wiring the product asked for, expressed with the SDK 57 player:
- *
- *   Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false })
- *   Audio.Sound.createAsync(source, { isLooping: true, volume: LOW, shouldPlay: true })
- *   sound.setVolumeAsync(value)   // Atmosfer slider
- *   sound.unloadAsync()            // chat unmount — useAudioPlayer releases it
+ * Mounted once from the root layout so home, rooms, DM, chat, and every other
+ * screen share the same player. It does not stop when a screen unmounts.
+ * Expo SDK 57 ships expo-audio (not expo-av) in Expo Go.
  */
-export const ATMOSPHERE_DEFAULT_VOLUME = 0.16;
+const ECHOES = require('../../assets/audio/echoes-of-solitude.mp3');
 
-const SOFT_LOOP = require('../../assets/audio/soft-loop.wav');
+let boundPlayer: AudioPlayer | null = null;
 
-function clampVolume(value: number): number {
-  if (Number.isNaN(value)) return ATMOSPHERE_DEFAULT_VOLUME;
-  return Math.min(1, Math.max(0, value));
+function applyVolume(player: AudioPlayer, volume: number) {
+  const next = clampAtmosphereVolume(volume);
+  player.loop = true;
+  player.volume = next;
+  player.muted = next === 0;
 }
 
-export function useAtmosphere() {
-  const player = useAudioPlayer(SOFT_LOOP);
-  const [volume, setVolumeState] = useState(ATMOSPHERE_DEFAULT_VOLUME);
+/** Starts playback after a volume gesture if autoplay was blocked. */
+export function nudgeAtmospherePlayback() {
+  const player = boundPlayer;
+  if (!player) return;
+  applyVolume(player, useAppStore.getState().atmosphereVolume);
+  if (player.muted) return;
+  try {
+    if (!player.playing) player.play();
+  } catch {
+    // Web autoplay can reject until this gesture. The button already updated volume.
+  }
+}
+
+export function AtmosphereHost() {
+  const player = useAudioPlayer(ECHOES);
+  const volume = useAppStore((state) => state.atmosphereVolume);
+  const hydrated = useAppStore((state) => state.hydrated);
 
   useEffect(() => {
-    let cancelled = false;
+    boundPlayer = player;
     player.loop = true;
-    player.volume = ATMOSPHERE_DEFAULT_VOLUME;
     setAudioModeAsync({
       playsInSilentMode: true,
       interruptionMode: 'mixWithOthers',
       shouldPlayInBackground: false,
       allowsRecording: false,
     }).catch(() => undefined);
-    try {
-      if (!cancelled) player.play();
-    } catch {
-      // Web autoplay can reject until the first gesture. The slider retries.
-    }
+    const subscription = player.addListener('playbackStatusUpdate', (status) => {
+      if (status.didJustFinish && !status.loop) {
+        player.loop = true;
+        void player.seekTo(0).then(() => {
+          try {
+            player.play();
+          } catch {
+            // The next volume button retries.
+          }
+        });
+      }
+    });
     return () => {
-      cancelled = true;
+      subscription.remove();
+      if (boundPlayer === player) boundPlayer = null;
       try {
         player.pause();
       } catch {
-        // The player is released with the screen.
+        // The root player is released with the app.
       }
     };
   }, [player]);
 
-  const setVolume = (value: number) => {
-    const next = clampVolume(value);
-    setVolumeState(next);
-    player.volume = next;
-    player.muted = next === 0;
-    if (next > 0 && !player.playing) {
-      try {
-        player.play();
-      } catch {
-        // Ignore autoplay blocks; the control still reflects the choice.
-      }
-    }
-  };
+  useEffect(() => {
+    applyVolume(player, volume);
+  }, [player, volume]);
 
-  return { volume, setVolume };
+  useEffect(() => {
+    if (!hydrated) return;
+    nudgeAtmospherePlayback();
+  }, [hydrated, player]);
+
+  return null;
 }

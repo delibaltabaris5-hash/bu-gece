@@ -26,7 +26,7 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <Screen>
+    <Screen bottom={false}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {step === 'welcome' ? (
           <View style={styles.block}>

@@ -22,7 +22,7 @@ Expo hesabı gerekmez. Telefon ve bilgisayar aynı ağda olmalıdır.
 3. Terminaldeki QR kodu Expo Go ile okut. Bağlantı koparsa `npx expo start --tunnel` dene.
 4. Android emülatör açıksa terminalde `a`.
 
-Açılınca **Bu Gece** sekmesi kilitli ana sayfadır: gece zemini, başlık ve hilal, **Yakındakiler | Genel**, ortada Felsefe ile dokuz ışıltılı oda baloncuğu, altta **Ücretsiz: 1–2 mesaj kaldı**. Kaydırmalı profil kartı yoktur. Atmosfer ses kaydırıcısı bir odaya girince görünür.
+Açılınca **Bu Gece** sekmesi kilitli ana sayfadır: gece zemini, başlık ve hilal, **Yakındakiler | Genel**, ortada Felsefe ile dokuz ışıltılı oda baloncuğu, altta **Ücretsiz: 1–2 mesaj kaldı**. Kaydırmalı profil kartı yoktur. Atmosfer müziği uygulama açılınca kısık sesle başlar; **Müziği yükselt** ve **Müziği kıs** her ekranda durur.
 
 Web için terminalde `w`.
 
@@ -60,7 +60,7 @@ cd android && ./gradlew assembleDebug
 
 1. Cinsiyet simgesi ve ev odası seçilir. Tempo isteğe bağlıdır.
 2. **Bu Gece** ekranı on odayı ışıltılı baloncuklar olarak gösterir. **Yakındakiler** Tarih için 1.2 km rozetini açar; **Genel** aynı takımyıldızı rozetsiz bırakır.
-3. **Odalar** on kulübü listeler. Oda açılınca moderatör bot o günün konusunu (alıntı + soru) bırakır. Altta Atmosfer kaydırıcısı kısık bir yumuşak döngü çalar. Dosya orijinal bir yer tutucudur; Hans Zimmer kaydı yoktur.
+3. **Odalar** on kulübü listeler. Oda açılınca moderatör bot o günün konusunu (alıntı + soru) bırakır. Atmosfer, ana sayfa, odalar, sohbet ve doğrudan mesaj dahil her ekranda aynı parçayı döngüye alır.
 4. Ücretsiz kullanıcı odaya 1–2 mesaj yazabilir. Bir kişiye dokununca yalnızca simge ve `Felsefe_4821` gibi geçici numara görünür. Doğrudan mesaj duvara düşer.
 5. **Pro’yu aç** kilidi bu cihazda açar. Profiller ve doğrudan mesaj kullanılabilir. **Ayarlar** içinden Pro kapatılabilir.
 
@@ -75,7 +75,11 @@ Sohbet, planlar ve satın alma bu sürümde cihazın içindedir. Sunucu, push ve
 | Doğrudan mesaj | Kapalı | Açık |
 | Ödeme | — | Yerel deneme. Play Billing sonra `src/billing/mockProBilling.ts` yerine bağlanır |
 
-Kimlik, Pro bayrağı ve sohbet AsyncStorage’da durur.
+Kimlik, Pro bayrağı, sohbet ve Atmosfer ses düzeyi AsyncStorage’da durur.
+
+## Atmosfer
+
+Arka plan döngüsü **Echoes of Solitude** (Discomfuse). Parça [Pixabay](https://pixabay.com/music/main-title-echoes-of-solitude-277006/) üzerindedir ve **Pixabay Content License** ile kullanılır. Dosya: `assets/audio/echoes-of-solitude.mp3`. Uygulama açılınca ses yaklaşık 0.15’te başlar; **Müziği yükselt** ve **Müziği kıs** seçimi cihazda kalır. Hans Zimmer kaydı yoktur.
 
 ## Proje
 
