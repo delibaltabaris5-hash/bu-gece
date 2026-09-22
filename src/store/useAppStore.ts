@@ -33,6 +33,10 @@ interface PersistedSlice {
   topicDayByRoom: Partial<Record<RoomId, string>>;
   freeMessagesRemaining: number;
   atmosphereVolume: number;
+  accountId: string | null;
+  accountEmail: string | null;
+  accountName: string;
+  authStepDone: boolean;
 }
 
 interface AppState extends PersistedSlice {
@@ -51,6 +55,8 @@ interface AppState extends PersistedSlice {
   postDirectMessage: (memberId: string, text: string) => boolean;
   setMood: (mood: Mood) => void;
   setAtmosphereVolume: (value: number) => void;
+  continueAsGuest: () => void;
+  signOut: () => void;
 }
 
 function trimThread<T>(items: T[]): T[] {
@@ -70,6 +76,10 @@ const emptyPersisted = (): PersistedSlice => ({
   topicDayByRoom: {},
   freeMessagesRemaining: FREE_MESSAGE_QUOTA,
   atmosphereVolume: ATMOSPHERE_DEFAULT_VOLUME,
+  accountId: null,
+  accountEmail: null,
+  accountName: '',
+  authStepDone: false,
 });
 
 assertCatalog();
@@ -124,6 +134,7 @@ export const useAppStore = create<AppState>()(
         });
       },
       unlockPro: async () => {
+        if (!get().accountId) return false;
         if (get().proBusy) return get().isPro;
         set({ proBusy: true });
         try {
@@ -163,6 +174,7 @@ export const useAppStore = create<AppState>()(
         const trimmed = text.trim().slice(0, 400);
         if (!trimmed) return false;
         const state = get();
+        if (!state.accountId) return false;
         if (!state.isPro && state.freeMessagesRemaining <= 0) return false;
         const room = getRoom(roomId);
         const now = Date.now();
@@ -208,11 +220,14 @@ export const useAppStore = create<AppState>()(
       setAtmosphereVolume: (value) => {
         set({ atmosphereVolume: clampAtmosphereVolume(value) });
       },
+      continueAsGuest: () => set({ authStepDone: true }),
+      signOut: () => set({ accountId: null, accountEmail: null, accountName: '' }),
       setMood: (mood) => set({ mood }),
       postDirectMessage: (memberId, text) => {
         const trimmed = text.trim().slice(0, 400);
         if (!trimmed) return false;
         const state = get();
+        if (!state.accountId) return false;
         if (!state.isPro && state.freeMessagesRemaining <= 0) return false;
         const now = Date.now();
         const current = state.directMessages[memberId] ?? [];
@@ -255,7 +270,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'bu-gece-v1',
       storage: guardedStorage,
-      version: 3,
+      version: 4,
       migrate: (persisted, version) => {
         const state = { ...(persisted as PersistedSlice) };
         // Missing count only: a number already stored (including a used 0–2 balance)
@@ -265,6 +280,12 @@ export const useAppStore = create<AppState>()(
         }
         if (version < 3 && typeof state.atmosphereVolume !== 'number') {
           state.atmosphereVolume = ATMOSPHERE_DEFAULT_VOLUME;
+        }
+        if (version < 4) {
+          if (typeof state.accountId !== 'string') state.accountId = null;
+          if (typeof state.accountEmail !== 'string') state.accountEmail = null;
+          if (typeof state.accountName !== 'string') state.accountName = '';
+          if (typeof state.authStepDone !== 'boolean') state.authStepDone = false;
         }
         return state;
       },
@@ -281,6 +302,10 @@ export const useAppStore = create<AppState>()(
         topicDayByRoom: state.topicDayByRoom,
         freeMessagesRemaining: state.freeMessagesRemaining,
         atmosphereVolume: state.atmosphereVolume,
+        accountId: state.accountId,
+        accountEmail: state.accountEmail,
+        accountName: state.accountName,
+        authStepDone: state.authStepDone,
       }),
     },
   ),

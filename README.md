@@ -91,6 +91,10 @@ Bu tam koruma değildir:
 
 Tam koruma için kota sunucuda tutulmalı ve hesap Apple, Google veya telefon numarasıyla bağlanmalıdır. Taslak: `docs/SPEC-server-quota.md`. Bu sürümdeki Pro hâlâ yerel bir denemedir.
 
+### Üye girişi
+
+İlk açılışta **Üye girişi** gelir. **Kayıt ol** yeni e-postayı 10 mesajla açar; görünen ad isteğe bağlıdır. **Giriş yap** yalnızca kayıtlı hesabı açar ve SecureStore’daki kalan mesajı geri getirir. Aynı e-posta ile yeniden giriş hakkı 10’a döndürmez. **Misafir olarak devam et** odaları gezdirir; yazmak giriş ister. E-posta kaydı ile **Gmail ile devam et** aynı ekranda alt alta durur. Bu kurulumda Google istemcisi olmadığı için Gmail düğmesi görünür ve durumu yazar; giriş açmaz. Apple satırı yakındadır. Ayarlar’da **Giriş yap**, **Hesabım** ve **Çıkış yap** durur.
+
 ## Atmosfer
 
 Arka plan döngüsü **Echoes of Solitude** (Discomfuse). Parça [Pixabay](https://pixabay.com/music/main-title-echoes-of-solitude-277006/) üzerindedir ve **Pixabay Content License** ile kullanılır. Dosya: `assets/audio/echoes-of-solitude.mp3`. Uygulama açılınca ses yaklaşık 0.15’te başlar; **Müziği yükselt** ve **Müziği kıs** seçimi cihazda kalır. Hans Zimmer kaydı yoktur.

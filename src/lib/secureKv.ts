@@ -23,6 +23,24 @@ export async function readSecureValue(key: string): Promise<SecureRead> {
   }
 }
 
+export async function deleteSecureValue(key: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      localStorage.removeItem(key);
+    } catch {
+      return;
+    }
+    return;
+  }
+  try {
+    if (!(await SecureStore.isAvailableAsync())) return;
+    await SecureStore.deleteItemAsync(key, NATIVE_OPTIONS);
+  } catch {
+    return;
+  }
+}
+
 export async function writeSecureValue(key: string, value: string): Promise<boolean> {
   if (Platform.OS === 'web') return writeWeb(key, value);
   try {

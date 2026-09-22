@@ -31,6 +31,7 @@ export default function RoomScreen() {
   const ensureDailyTopic = useAppStore((state) => state.ensureDailyTopic);
   const postRoomMessage = useAppStore((state) => state.postRoomMessage);
   const isPro = useAppStore((state) => state.isPro);
+  const accountId = useAppStore((state) => state.accountId);
   const freeMessagesRemaining = useAppStore((state) => state.freeMessagesRemaining);
   const gender = useAppStore((state) => state.gender);
   const tempNick = useAppStore((state) => state.tempNick);
@@ -97,9 +98,14 @@ export default function RoomScreen() {
     );
   };
 
-  const quotaBlocked = !isPro && freeMessagesRemaining <= 0;
+  const signedIn = Boolean(accountId);
+  const quotaBlocked = signedIn && !isPro && freeMessagesRemaining <= 0;
 
   const send = () => {
+    if (!signedIn) {
+      router.push('/giris');
+      return;
+    }
     if (quotaBlocked) return;
     const sent = postRoomMessage(room.id, draft);
     if (sent) setDraft('');
@@ -120,7 +126,7 @@ export default function RoomScreen() {
             <Crescent size={18} cutoutColor={colors.bg} />
           </View>
           <Text style={styles.subtitle}>
-            {room.name} Bot · {isPro ? 'Pro' : `Ücretsiz · ${Math.max(0, freeMessagesRemaining)} mesaj`}
+            {room.name} Bot · {!signedIn ? 'Üye girişi gerekli' : isPro ? 'Pro' : `Ücretsiz · ${Math.max(0, freeMessagesRemaining)} mesaj`}
           </Text>
         </View>
       </View>
@@ -142,32 +148,40 @@ export default function RoomScreen() {
 
       <View style={styles.composer}>
         <Text style={styles.hint}>
-          {isPro
+          {!signedIn
+            ? 'Misafir gezinebilir. Yazmak için üye girişi gerekir.'
+            : isPro
             ? 'Pro: sabit adlar açık. Odaya herkes yazabilir.'
             : quotaBlocked
               ? 'Ücretsiz mesaj hakkın doldu. Pro sınırsız yazar.'
               : `Ücretsiz: ${freeMessagesRemaining} mesaj kaldı. Simge ve geçici numara.`}
         </Text>
-        <View style={styles.composerRow}>
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="Odaya bir cümle bırak"
-            placeholderTextColor={colors.faint}
-            style={styles.input}
-            maxLength={400}
-            multiline
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Gönder"
-            disabled={!draft.trim() || quotaBlocked}
-            onPress={send}
-            style={[styles.send, (!draft.trim() || quotaBlocked) && styles.sendOff]}
-          >
-            <Text style={styles.sendLabel}>Gönder</Text>
+        {!signedIn ? (
+          <Pressable accessibilityRole="button" onPress={() => router.push('/giris')} style={styles.loginCta}>
+            <Text style={styles.sendLabel}>Üye girişi</Text>
           </Pressable>
-        </View>
+        ) : (
+          <View style={styles.composerRow}>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Odaya bir cümle bırak"
+              placeholderTextColor={colors.faint}
+              style={styles.input}
+              maxLength={400}
+              multiline
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Gönder"
+              disabled={!draft.trim() || quotaBlocked}
+              onPress={send}
+              style={[styles.send, (!draft.trim() || quotaBlocked) && styles.sendOff]}
+            >
+              <Text style={styles.sendLabel}>Gönder</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -284,6 +298,13 @@ const styles = StyleSheet.create({
   },
   sendOff: {
     opacity: 0.4,
+  },
+  loginCta: {
+    backgroundColor: night.fill,
+    borderRadius: 999,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sendLabel: {
     color: colors.ink,

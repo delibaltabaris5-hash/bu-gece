@@ -26,6 +26,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { width: windowWidth } = useWindowDimensions();
   const isPro = useAppStore((state) => state.isPro);
+  const accountId = useAppStore((state) => state.accountId);
   const remaining = useAppStore((state) => state.freeMessagesRemaining);
   const [field, setField] = useState({ width: 0, height: 0 });
 
@@ -34,7 +35,8 @@ export default function HomeScreen() {
     [field.width, field.height],
   );
   const titleSize = Math.min(46, Math.max(34, Math.min(windowWidth, 480) * 0.108));
-  const ratio = quotaRatio(remaining, isPro);
+  const signedIn = Boolean(accountId);
+  const ratio = signedIn ? quotaRatio(remaining, isPro) : 0;
 
   return (
     <Screen backgroundColor={night.bg} bottom={false}>
@@ -97,7 +99,7 @@ export default function HomeScreen() {
         <View style={styles.quota}>
           <View style={styles.quotaCopy}>
             <Text style={styles.quotaText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
-              {quotaLabel(remaining, isPro)}
+              {quotaLabel(remaining, isPro, signedIn)}
             </Text>
             <View
               accessibilityRole="progressbar"
@@ -105,7 +107,7 @@ export default function HomeScreen() {
               accessibilityValue={{
                 min: 0,
                 max: FREE_MESSAGE_QUOTA,
-                now: isPro ? FREE_MESSAGE_QUOTA : Math.max(0, Math.min(FREE_MESSAGE_QUOTA, remaining)),
+                now: !signedIn ? 0 : isPro ? FREE_MESSAGE_QUOTA : Math.max(0, Math.min(FREE_MESSAGE_QUOTA, remaining)),
               }}
               style={styles.progressTrack}
             >

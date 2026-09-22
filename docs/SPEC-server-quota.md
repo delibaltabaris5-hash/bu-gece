@@ -23,6 +23,12 @@ The count has to live somewhere a reinstall cannot wipe. A stable hardware id is
 - **Android:** SecureStore is usually deleted when the app is uninstalled. `androidId` can stay the same and still be useless, because the stored count is gone.
 - **Web:** there is no SecureStore. The same keys sit in `localStorage` and disappear with site data.
 
+## Local accounts (this PR)
+
+`src/lib/accountBook.ts` stores a map of email accounts in SecureStore (`bugece.accounts`), plus the current session id. **Kayıt ol** creates an account at 10 messages. **Giriş yap** only restores an existing account and does not mint quota. Each account holds `freeMessagesRemaining`, optional `displayName`, and `isPro`. The same email keeps its stored count across an AsyncStorage wipe when the SecureStore map survives. Sending requires `accountId`. Guests can browse. On the auth screen, email signup and Gmail are two stacked controls. This build has no Google client, so the Gmail control stays visible and says so. Apple remains a stacked “yakında” row.
+
+This map is still on-device. A new local email can mint another 10 until the server owns the counter. Android uninstall usually deletes the map.
+
 ## Next product
 
 1. Sign-in with Apple, Google, or a phone number. A new install must not mint a free quota by itself.

@@ -25,6 +25,7 @@ export default function DirectScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const member = getMember(params.id);
   const isPro = useAppStore((state) => state.isPro);
+  const accountId = useAppStore((state) => state.accountId);
   const hydrated = useAppStore((state) => state.hydrated);
   const gender = useAppStore((state) => state.gender);
   const stableNick = useAppStore((state) => state.stableNick);
@@ -34,6 +35,7 @@ export default function DirectScreen() {
 
   const data = useMemo(() => [...(thread ?? [])].reverse(), [thread]);
 
+  if (hydrated && !accountId) return <Redirect href="/giris" />;
   if (hydrated && !isPro) return <Redirect href="/pro" />;
   if (!member) {
     return (
