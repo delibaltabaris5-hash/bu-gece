@@ -30,7 +30,7 @@ export default function MemberScreen() {
   const tempNick = memberTempNick(room.name, member.id);
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: 16 }]}>
       <Pressable accessibilityRole="button" accessibilityLabel="Geri" onPress={() => router.back()}>
         <Text style={styles.back}>Geri</Text>
       </Pressable>

@@ -12,13 +12,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AtmosphereControl } from '@/components/AtmosphereControl';
 import { Crescent } from '@/components/Crescent';
 import { MessageBubble } from '@/components/MessageBubble';
 import { getMember } from '@/data/members';
 import { getRoom } from '@/data/rooms';
 import { topicForDay } from '@/data/topics';
-import { useAtmosphere } from '@/hooks/useAtmosphere';
 import { memberTempNick, tempNickInRoom } from '@/lib/identity';
 import { useAppStore } from '@/store/useAppStore';
 import { colors, radius, space } from '@/theme';
@@ -38,7 +36,6 @@ export default function RoomScreen() {
   const tempNick = useAppStore((state) => state.tempNick);
   const stableNick = useAppStore((state) => state.stableNick);
   const [draft, setDraft] = useState('');
-  const atmosphere = useAtmosphere();
 
   useEffect(() => {
     if (room) ensureDailyTopic(room.id);
@@ -171,9 +168,6 @@ export default function RoomScreen() {
             <Text style={styles.sendLabel}>Gönder</Text>
           </Pressable>
         </View>
-      </View>
-      <View style={{ paddingBottom: Math.max(insets.bottom, 8), backgroundColor: colors.bg }}>
-        <AtmosphereControl volume={atmosphere.volume} onVolume={atmosphere.setVolume} />
       </View>
     </KeyboardAvoidingView>
   );

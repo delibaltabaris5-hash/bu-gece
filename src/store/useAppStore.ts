@@ -10,6 +10,7 @@ import { buildSeedMessages } from '@/data/seedMessages';
 import { topicForDay } from '@/data/topics';
 import { topicBody, todayKey } from '@/lib/format';
 import { pickStableNick, pickTempNumber } from '@/lib/identity';
+import { ATMOSPHERE_DEFAULT_VOLUME, clampAtmosphereVolume } from '@/lib/atmosphere';
 import { FREE_MESSAGE_QUOTA } from '@/lib/quota';
 import type {
   ChatMessage,
@@ -31,6 +32,7 @@ interface PersistedSlice {
   directMessages: Record<string, DirectMessage[]>;
   topicDayByRoom: Partial<Record<RoomId, string>>;
   freeMessagesRemaining: number;
+  atmosphereVolume: number;
 }
 
 interface AppState extends PersistedSlice {
@@ -47,6 +49,7 @@ interface AppState extends PersistedSlice {
   ensureDailyTopic: (roomId: RoomId) => void;
   postRoomMessage: (roomId: RoomId, text: string) => boolean;
   postDirectMessage: (memberId: string, text: string) => void;
+  setAtmosphereVolume: (value: number) => void;
 }
 
 function trimThread<T>(items: T[]): T[] {
@@ -65,6 +68,7 @@ const emptyPersisted = (): PersistedSlice => ({
   directMessages: {},
   topicDayByRoom: {},
   freeMessagesRemaining: FREE_MESSAGE_QUOTA,
+  atmosphereVolume: ATMOSPHERE_DEFAULT_VOLUME,
 });
 
 assertCatalog();
@@ -179,6 +183,9 @@ export const useAppStore = create<AppState>()(
         }, 800);
         return true;
       },
+      setAtmosphereVolume: (value) => {
+        set({ atmosphereVolume: clampAtmosphereVolume(value) });
+      },
       postDirectMessage: (memberId, text) => {
         if (!get().isPro) return;
         const trimmed = text.trim().slice(0, 400);
@@ -220,11 +227,14 @@ export const useAppStore = create<AppState>()(
     {
       name: 'bu-gece-v1',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
-        const state = persisted as PersistedSlice;
+        const state = { ...(persisted as PersistedSlice) };
         if (version < 2 && typeof state.freeMessagesRemaining !== 'number') {
-          return { ...state, freeMessagesRemaining: FREE_MESSAGE_QUOTA };
+          state.freeMessagesRemaining = FREE_MESSAGE_QUOTA;
+        }
+        if (version < 3 && typeof state.atmosphereVolume !== 'number') {
+          state.atmosphereVolume = ATMOSPHERE_DEFAULT_VOLUME;
         }
         return state;
       },
@@ -240,6 +250,7 @@ export const useAppStore = create<AppState>()(
         directMessages: state.directMessages,
         topicDayByRoom: state.topicDayByRoom,
         freeMessagesRemaining: state.freeMessagesRemaining,
+        atmosphereVolume: state.atmosphereVolume,
       }),
     },
   ),

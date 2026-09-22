@@ -27,7 +27,6 @@ export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const isPro = useAppStore((state) => state.isPro);
   const remaining = useAppStore((state) => state.freeMessagesRemaining);
-  const roomId = useAppStore((state) => state.roomId);
   const [scope, setScope] = useState<HomeScope>('yakindakiler');
   const [field, setField] = useState({ width: 0, height: 0 });
 
@@ -37,7 +36,6 @@ export default function HomeScreen() {
   );
   const titleSize = Math.min(46, Math.max(34, Math.min(windowWidth, 480) * 0.108));
   const ratio = quotaRatio(remaining, isPro);
-  const atmosphereRoom = roomId ?? 'felsefe';
 
   return (
     <Screen backgroundColor={night.bg} bottom={false}>
@@ -133,23 +131,6 @@ export default function HomeScreen() {
               <View style={[styles.progressFill, { width: `${Math.round(ratio * 100)}%` }]} />
             </View>
           </View>
-          <View style={styles.divider} />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Atmosfer, ses sohbet odasında"
-            onPress={() => router.push(`/oda/${atmosphereRoom}`)}
-            style={styles.atmosphere}
-          >
-            <View style={styles.waveWrap}>
-              <Waveform />
-            </View>
-            <View style={styles.atmosphereCopy}>
-              <Text style={styles.atmosphereTitle}>Atmosfer</Text>
-              <Text style={styles.atmosphereSub} numberOfLines={1}>
-                Yumuşak döngü · Sesli
-              </Text>
-            </View>
-          </Pressable>
         </View>
       </View>
     </Screen>
@@ -174,17 +155,6 @@ function ScopeTab({
     >
       <Text style={[styles.scopeLabel, selected && styles.scopeLabelOn]}>{label}</Text>
     </Pressable>
-  );
-}
-
-function Waveform() {
-  const heights = [7, 13, 17, 11, 6];
-  return (
-    <View style={styles.wave}>
-      {heights.map((height, index) => (
-        <View key={index} style={[styles.waveBar, { height }]} />
-      ))}
-    </View>
   );
 }
 
@@ -303,57 +273,5 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 3,
     backgroundColor: night.fill,
-  },
-  divider: {
-    width: 1,
-    alignSelf: 'stretch',
-    marginVertical: 12,
-    backgroundColor: 'rgba(130, 180, 220, 0.35)',
-  },
-  atmosphere: {
-    minHeight: 44,
-    minWidth: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingLeft: 10,
-    paddingRight: 6,
-    maxWidth: 168,
-  },
-  waveWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(18, 44, 76, 0.95)',
-    borderWidth: 1,
-    borderColor: 'rgba(130, 190, 240, 0.4)',
-  },
-  wave: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    height: 18,
-  },
-  waveBar: {
-    width: 2,
-    borderRadius: 1,
-    backgroundColor: night.glowBright,
-  },
-  atmosphereCopy: {
-    flexShrink: 1,
-    gap: 1,
-  },
-  atmosphereTitle: {
-    color: night.text,
-    fontSize: 13,
-    fontWeight: '700',
-    fontFamily: fontFamily.sans,
-  },
-  atmosphereSub: {
-    color: night.muted,
-    fontSize: 10,
-    fontFamily: fontFamily.sans,
   },
 });

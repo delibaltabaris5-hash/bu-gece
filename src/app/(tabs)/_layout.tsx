@@ -1,7 +1,8 @@
 import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
-import { Text, type ColorValue } from 'react-native';
+import { Text, View, type ColorValue } from 'react-native';
 
+import { AtmosphereControl } from '@/components/AtmosphereControl';
 import { useAppStore } from '@/store/useAppStore';
 import { colors, night } from '@/theme';
 
@@ -17,6 +18,12 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      screenLayout={({ children }) => (
+        <View style={{ flex: 1, backgroundColor: night.bg }}>
+          <View style={{ flex: 1 }}>{children}</View>
+          <AtmosphereControl includeSafeArea={false} />
+        </View>
+      )}
       screenOptions={{
         headerShown: false,
         tabBarStyle: {

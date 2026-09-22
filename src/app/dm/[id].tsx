@@ -95,7 +95,7 @@ export default function DirectScreen() {
           keyboardShouldPersistTaps="handled"
         />
       )}
-      <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+      <View style={[styles.composer, { paddingBottom: 10 }]}>
         <View style={styles.composerRow}>
           <TextInput
             value={draft}
