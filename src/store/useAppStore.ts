@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { createJSONStorage, persist, type PersistStorage } from 'zustand/middleware';
 
 import { purchasePro } from '@/billing/mockProBilling';
 import { botReply, dmReply } from '@/data/bot';
@@ -74,6 +74,27 @@ const emptyPersisted = (): PersistedSlice => ({
 
 assertCatalog();
 
+let persistWritesEnabled = false;
+
+/** Turn on AsyncStorage writes after hydration so a default of 10 cannot overwrite a stored balance. */
+export function enablePersistedWrites(): void {
+  persistWritesEnabled = true;
+}
+
+const jsonStorage = createJSONStorage<PersistedSlice>(() => AsyncStorage);
+if (!jsonStorage) {
+  throw new Error('AsyncStorage persist is unavailable');
+}
+
+const guardedStorage: PersistStorage<PersistedSlice> = {
+  getItem: (name) => jsonStorage.getItem(name),
+  setItem: (name, value) => {
+    if (!persistWritesEnabled) return;
+    return jsonStorage.setItem(name, value);
+  },
+  removeItem: (name) => jsonStorage.removeItem(name),
+};
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -99,7 +120,7 @@ export const useAppStore = create<AppState>()(
           mood: null,
           stableNick: '',
           tempNick: '',
-          freeMessagesRemaining: FREE_MESSAGE_QUOTA,
+          // Profile reset must not refill the free quota. SecureStore keeps the lower count.
         });
       },
       unlockPro: async () => {
@@ -233,10 +254,12 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'bu-gece-v1',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: guardedStorage,
       version: 3,
       migrate: (persisted, version) => {
         const state = { ...(persisted as PersistedSlice) };
+        // Missing count only: a number already stored (including a used 0–2 balance)
+        // stays. Do not top that up to the current default of 10.
         if (version < 2 && typeof state.freeMessagesRemaining !== 'number') {
           state.freeMessagesRemaining = FREE_MESSAGE_QUOTA;
         }

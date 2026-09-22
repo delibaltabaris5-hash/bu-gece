@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AtmosphereControl } from '@/components/AtmosphereControl';
 import { AtmosphereHost } from '@/hooks/useAtmosphere';
+import { reconcileSecureQuota, watchSecureQuotaAfterHydration } from '@/lib/secureQuota';
 import { useAppStore } from '@/store/useAppStore';
 import { colors, night } from '@/theme';
 
@@ -25,13 +26,17 @@ export default function RootLayout() {
     const finish = () => {
       if (settled) return;
       settled = true;
-      useAppStore.setState({ hydrated: true });
+      void reconcileSecureQuota().finally(() => {
+        useAppStore.setState({ hydrated: true });
+      });
     };
     const unsubscribe = useAppStore.persist.onFinishHydration(finish);
+    const stopWatch = watchSecureQuotaAfterHydration();
     if (useAppStore.persist.hasHydrated()) finish();
     const timer = setTimeout(finish, 2500);
     return () => {
       unsubscribe();
+      stopWatch();
       clearTimeout(timer);
     };
   }, []);

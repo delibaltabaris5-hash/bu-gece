@@ -10,7 +10,7 @@ import { colors, fontFamily, night, radius, space } from '@/theme';
 const ROWS = [
   {
     title: 'Ücretsiz',
-    body: 'Cinsiyet simgesi, geçici numara ve 1–2 mesaj. Hak bitince Sohbetler Pro kilidini gösterir.',
+    body: 'Cinsiyet simgesi, geçici numara ve 10 mesaj. Hak bitince Sohbetler Pro kilidini gösterir.',
   },
   {
     title: 'Pro',

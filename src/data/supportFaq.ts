@@ -13,7 +13,7 @@ export const SUPPORT_FAQ: SupportFaq[] = [
     label: 'Ücretsiz kota',
     keywords: ['ücretsiz', 'kota', 'mesaj hakkı', 'kaldı', 'hak'],
     answer:
-      'Ücretsiz planda oda ve Sohbetler aynı 1–2 mesajı paylaşır. Hak bitince yazma durur, okuma sürer. Pro ile mesaj sınırsızdır.',
+      'Ücretsiz planda oda ve Sohbetler aynı 10 mesajı paylaşır. Hak bitince yazma durur, okuma sürer. Pro ile mesaj sınırsızdır.',
   },
   {
     id: 'pro',

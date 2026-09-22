@@ -8,7 +8,7 @@ import { Screen } from '@/components/ui';
 import { BUBBLE_ART } from '@/data/bubbleArt';
 import { placeConstellation } from '@/data/constellation';
 import { getRoom } from '@/data/rooms';
-import { quotaLabel, quotaRatio } from '@/lib/quota';
+import { FREE_MESSAGE_QUOTA, quotaLabel, quotaRatio } from '@/lib/quota';
 import { useAppStore } from '@/store/useAppStore';
 import { fontFamily, night } from '@/theme';
 
@@ -104,8 +104,8 @@ export default function HomeScreen() {
               accessibilityLabel="Ücretsiz mesaj hakkı"
               accessibilityValue={{
                 min: 0,
-                max: 2,
-                now: isPro ? 2 : Math.max(0, remaining),
+                max: FREE_MESSAGE_QUOTA,
+                now: isPro ? FREE_MESSAGE_QUOTA : Math.max(0, Math.min(FREE_MESSAGE_QUOTA, remaining)),
               }}
               style={styles.progressTrack}
             >

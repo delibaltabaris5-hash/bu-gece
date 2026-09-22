@@ -69,7 +69,7 @@ export default function SettingsScreen() {
             <Pill label={isPro ? 'Pro' : 'Ücretsiz'} tone={isPro ? 'gold' : 'muted'} />
           </View>
           <Text style={styles.body}>
-            Ücretsiz planda kişiler simge ve geçici numarayla görünür. Oda ve Sohbetler aynı 1–2 mesajı paylaşır
+            Ücretsiz planda kişiler simge ve geçici numarayla görünür. Oda ve Sohbetler aynı 10 mesajı paylaşır
             {isPro ? ' (Pro ile sınırsız).' : ` (${Math.max(0, freeMessagesRemaining)} kaldı).`}
           </Text>
           <Text style={styles.body}>

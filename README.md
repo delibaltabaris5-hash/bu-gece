@@ -22,7 +22,7 @@ Expo hesabı gerekmez. Telefon ve bilgisayar aynı ağda olmalıdır.
 3. Terminaldeki QR kodu Expo Go ile okut. Bağlantı koparsa `npx expo start --tunnel` dene.
 4. Android emülatör açıksa terminalde `a`.
 
-Açılınca **Bu Gece** sekmesi kilitli ana sayfadır: gece zemini, başlık ve hilal, **Yakındakiler | Genel**, ortada Felsefe ile dokuz ışıltılı oda baloncuğu, altta **Ücretsiz: 1–2 mesaj kaldı**. Kaydırmalı profil kartı yoktur. Atmosfer müziği uygulama açılınca kısık sesle başlar; **Müziği yükselt** ve **Müziği kıs** her ekranda durur.
+Açılınca **Bu Gece** sekmesi kilitli ana sayfadır: gece zemini, başlık ve hilal, ortada Felsefe ile dokuz ışıltılı oda baloncuğu, altta **Ücretsiz: 10 mesaj kaldı**. Yakındakiler / Genel anahtarı yoktur. Kaydırmalı profil kartı yoktur. Atmosfer müziği uygulama açılınca kısık sesle başlar; **Müziği yükselt** ve **Müziği kıs** her ekranda durur.
 
 Web için terminalde `w`.
 
@@ -59,9 +59,9 @@ cd android && ./gradlew assembleDebug
 ## Akış
 
 1. Cinsiyet simgesi ve ev odası seçilir. Tempo isteğe bağlıdır.
-2. **Bu Gece** ekranı on odayı ışıltılı baloncuklar olarak gösterir. **Yakındakiler** Tarih için 1.2 km rozetini açar; **Genel** aynı takımyıldızı rozetsiz bırakır.
+2. **Bu Gece** ekranı on odayı ışıltılı baloncuklar olarak gösterir. Ana sayfada Yakındakiler / Genel anahtarı yoktur; kilometre rozeti görünmez.
 3. **Odalar** on kulübü listeler. Oda açılınca moderatör bot o günün konusunu (alıntı + soru) bırakır. Atmosfer, ana sayfa, odalar, sohbet ve doğrudan mesaj dahil her ekranda aynı parçayı döngüye alır.
-4. Ücretsiz kullanıcı odaya 1–2 mesaj yazabilir. Bir kişiye dokununca yalnızca simge ve `Felsefe_4821` gibi geçici numara görünür. Doğrudan mesaj duvara düşer.
+4. Ücretsiz kullanıcı odaya 10 mesaj yazabilir. Bir kişiye dokununca yalnızca simge ve `Felsefe_4821` gibi geçici numara görünür. Doğrudan mesaj duvara düşer.
 5. **Pro’yu aç** kilidi bu cihazda açar. Profiller ve doğrudan mesaj kullanılabilir. **Ayarlar** içinden Pro kapatılabilir.
 
 Sohbet, planlar ve satın alma bu sürümde cihazın içindedir. Sunucu, push ve gerçek ödeme yoktur.
@@ -71,11 +71,25 @@ Sohbet, planlar ve satın alma bu sürümde cihazın içindedir. Sunucu, push ve
 | | Ücretsiz | Pro |
 | --- | --- | --- |
 | Odada görünüm | Cinsiyet simgesi + geçici numara | Sabit takma ad ve kısa tanıtım |
-| Oda sohbeti | Okuma ve 1–2 mesaj | Okuma ve sınırsız yazma |
+| Oda sohbeti | Okuma ve 10 mesaj | Okuma ve sınırsız yazma |
 | Doğrudan mesaj | Kapalı | Açık |
 | Ödeme | — | Yerel deneme. Play Billing sonra `src/billing/mockProBilling.ts` yerine bağlanır |
 
-Kimlik, Pro bayrağı, sohbet ve Atmosfer ses düzeyi AsyncStorage’da durur.
+Kimlik, sohbet ve Atmosfer ses düzeyi AsyncStorage’da durur. Ücretsiz mesaj hakkı (`freeMessagesRemaining`) ve yerel Pro bayrağı ayrıca SecureStore’da, cihaz kimliğine bağlı bir anahtarda durur.
+
+### Yeniden kurulum
+
+Yeni bir cihazda hak 10’dur. AsyncStorage veya SecureStore’da kalan sayı zaten varsa o sayı durur; eski 2’lik bakiye 10’a tamamlanmaz. Açılışta, AsyncStorage yüklendikten sonra SecureStore ile karşılaştırılır. SecureStore’daki kalan hak daha düşükse o sayı tutulur. AsyncStorage silinmesi ücretsiz mesajı geri açmaz. **Kimliği sıfırla** da hakkı doldurmaz.
+
+Cihaz kimliği varsa `expo-application` ile alınır: Android’de `androidId`, iOS’ta `identifierForVendor`. İkisi de yoksa SecureStore’da saklanan bir UUID kullanılır. Seçilen kimlik `bugece.install-id` anahtarına yazılır. iOS vendor kimliği yeniden kurulumda değişebilir; Keychain’deki kayıt duruyorsa kota anahtarı ona bağlı kalır.
+
+Bu tam koruma değildir:
+
+- **iOS:** SecureStore, Keychain kullanır (`AFTER_FIRST_UNLOCK`). Uygulamayı silip kurunca kayıt çoğu zaman kalır, bu yüzden ücretsiz hak sıfırlanmayabilir. Her iOS sürümü ve her yedek geri yüklemesi için garanti değildir.
+- **Android:** SecureStore uygulama silinince genellikle temizlenir. `androidId` aynı kalsa bile sayaç gider; yeniden kurulum hakkı baştan açabilir.
+- **Web:** SecureStore yoktur. Aynı anahtarlar `localStorage` içindedir ve site verisi silinince gider.
+
+Tam koruma için kota sunucuda tutulmalı ve hesap Apple, Google veya telefon numarasıyla bağlanmalıdır. Taslak: `docs/SPEC-server-quota.md`. Bu sürümdeki Pro hâlâ yerel bir denemedir.
 
 ## Atmosfer
 
@@ -84,7 +98,7 @@ Arka plan döngüsü **Echoes of Solitude** (Discomfuse). Parça [Pixabay](https
 ## Proje
 
 - Expo SDK 57, React Native, TypeScript, Expo Router
-- Zustand + AsyncStorage
+- Zustand + AsyncStorage, ücretsiz kota için ek olarak `expo-secure-store` ve `expo-application`
 - `src/app` ekranlar, `src/data` odalar ve konular, `src/store` durum, `src/billing` ödeme sınırı
 
 ```bash
