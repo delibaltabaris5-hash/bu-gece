@@ -276,6 +276,11 @@ export default function LoginScreen() {
               </Pressable>
               <Text style={styles.fine}>Şifre yalnızca bu cihazda durur.</Text>
             </View>
+            <GoogleSignInButton
+              disabled={busy}
+              onProfile={(profile) => void google(profile)}
+              onMessage={setError}
+            />
           </ScrollView>
           <AtmosphereSlider />
         </KeyboardAvoidingView>

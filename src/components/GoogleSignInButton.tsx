@@ -2,11 +2,13 @@ import * as Google from 'expo-auth-session/providers/google';
 import { useEffect, useRef } from 'react';
 import { Image, Pressable, StyleSheet, Text } from 'react-native';
 
+import type { AuthSessionResult } from 'expo-auth-session';
+
 import {
   fetchGoogleProfile,
-  GOOGLE_CONFIG_MESSAGE,
   GOOGLE_REDIRECT,
   googleClientIds,
+  googleConfigMessage,
   isGoogleAuthConfigured,
 } from '@/lib/googleAuth';
 import { fontFamily } from '@/theme';
@@ -24,7 +26,7 @@ export function GoogleSignInButton(props: Props) {
     return (
       <GmailPill
         disabled={props.disabled}
-        onPress={() => props.onMessage(GOOGLE_CONFIG_MESSAGE)}
+        onPress={() => props.onMessage(googleConfigMessage())}
       />
     );
   }
@@ -51,22 +53,29 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage }: Props) {
   onMessageRef.current = onMessage;
   const handled = useRef('');
 
-  useEffect(() => {
-    if (!response || response.type !== 'success') return;
-    const access = response.authentication?.accessToken || response.params.access_token || '';
-    const idToken = response.authentication?.idToken || response.params.id_token || '';
+  const consume = async (result: AuthSessionResult | null) => {
+    if (!result || result.type !== 'success') {
+      if (result?.type === 'error') {
+        onMessageRef.current('Google girişi tamamlanamadı. Yönlendirme adresini ve istemci kimliğini kontrol et.');
+      }
+      return;
+    }
+    const access = result.authentication?.accessToken || result.params.access_token || '';
+    const idToken = result.authentication?.idToken || result.params.id_token || '';
     if (!access && !idToken) return;
     const key = `${access}:${idToken}`;
     if (handled.current === key) return;
     handled.current = key;
-    void (async () => {
-      const profile = await fetchGoogleProfile(access, idToken);
-      if (!profile) {
-        onMessageRef.current('Google hesabından e-posta alınamadı.');
-        return;
-      }
-      onProfileRef.current(profile);
-    })();
+    const profile = await fetchGoogleProfile(access, idToken);
+    if (!profile) {
+      onMessageRef.current('Google hesabından e-posta alınamadı.');
+      return;
+    }
+    onProfileRef.current(profile);
+  };
+
+  useEffect(() => {
+    void consume(response);
   }, [response]);
 
   const press = async () => {
@@ -76,10 +85,7 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage }: Props) {
       return;
     }
     try {
-      const result = await promptAsync();
-      if (result.type === 'error') {
-        onMessage('Google girişi tamamlanamadı. Yönlendirme adresini ve istemci kimliğini kontrol et.');
-      }
+      await consume(await promptAsync());
     } catch {
       onMessage('Google girişi açılamadı. İstemci kimliğini kontrol et.');
     }

@@ -14,8 +14,11 @@ function readEnv(name: string): string {
 }
 
 export function googleClientIds(): { web: string; ios: string; android: string } {
+  // Expo inlines only EXPO_PUBLIC_ variables. A bare GOOGLE_CLIENT_ID never reaches the app.
+  const web =
+    readEnv('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID') || readEnv('EXPO_PUBLIC_GOOGLE_CLIENT_ID');
   return {
-    web: readEnv('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID'),
+    web,
     ios: readEnv('EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID'),
     android: readEnv('EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID'),
   };
@@ -29,8 +32,16 @@ export function isGoogleAuthConfigured(): boolean {
   return Boolean(web);
 }
 
-export const GOOGLE_CONFIG_MESSAGE =
-  'Gmail girişi için Google istemci kimliği gerekli. EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID, EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ve EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID dolunca bu düğme hesabı açar.';
+/** Shown only when this platform has no client id. The button still explains which variable to set. */
+export function googleConfigMessage(): string {
+  const which =
+    Platform.OS === 'ios'
+      ? 'EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID'
+      : Platform.OS === 'android'
+        ? 'EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID'
+        : 'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID veya EXPO_PUBLIC_GOOGLE_CLIENT_ID';
+  return `Gmail girişi Google oturumunu açar. Bu kurulumda istemci kimliği yok: ${which}. Expo, EXPO_PUBLIC_ öneki olmayan GOOGLE_CLIENT_ID değerini uygulamaya koymaz.`;
+}
 
 type GoogleProfile = { email: string; name: string };
 
