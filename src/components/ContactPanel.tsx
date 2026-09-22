@@ -136,10 +136,11 @@ export function ContactPanel({ visible, onClose }: { visible: boolean; onClose: 
 
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Bize ulaşın"
               onPress={() => setEmailVisible(true)}
               style={({ pressed }) => [styles.write, pressed && styles.pressed]}
             >
-              <Text style={styles.writeLabel}>Bana yaz</Text>
+              <Text style={styles.writeLabel}>Bize ulaşın</Text>
             </Pressable>
             {emailVisible ? (
               <Pressable accessibilityRole="link" onPress={openMail}>
