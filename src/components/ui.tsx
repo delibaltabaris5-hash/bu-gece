@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, radius, space } from '@/theme';
+import { colors, night, space } from '@/theme';
 
 export function Screen({
   children,
@@ -123,29 +123,34 @@ const styles = StyleSheet.create({
   },
   primary: {
     minHeight: 52,
-    borderRadius: radius.md,
-    backgroundColor: colors.gold,
+    borderRadius: 999,
+    backgroundColor: night.fill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: space.lg,
+    elevation: 8,
+    shadowColor: night.glow,
+    shadowOpacity: 0.75,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
   },
   primaryLabel: {
-    color: colors.ink,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },
   secondary: {
     minHeight: 48,
-    borderRadius: radius.md,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.line,
+    borderColor: night.glassLine,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: space.lg,
-    backgroundColor: colors.elevated,
+    backgroundColor: 'rgba(8, 18, 34, 0.72)',
   },
   secondaryLabel: {
-    color: colors.text,
+    color: night.text,
     fontSize: 15,
     fontWeight: '600',
   },
@@ -177,20 +182,22 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   chipOn: {
-    backgroundColor: colors.cardOn,
-    borderColor: colors.gold,
+    backgroundColor: night.segment,
+    borderColor: night.ring,
   },
   chipLabel: {
     color: colors.muted,
     fontSize: 14,
   },
   chipLabelOn: {
-    color: colors.goldSoft,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   pill: {
     borderRadius: 999,
-    backgroundColor: '#2A2418',
+    backgroundColor: 'rgba(30, 90, 152, 0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(130, 196, 255, 0.45)',
     paddingHorizontal: 10,
     paddingVertical: 4,
   },

@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { genderLabel } from '@/labels';
-import { colors } from '@/theme';
+import { night } from '@/theme';
 import type { Gender } from '@/types';
 
 interface AvatarProps {
@@ -12,8 +12,8 @@ interface AvatarProps {
 export function Avatar({ gender, size = 36 }: AvatarProps) {
   const palette =
     gender === 'kadin'
-      ? { bg: colors.roseBg, ink: colors.rose }
-      : { bg: colors.blueBg, ink: colors.blue };
+      ? { bg: '#24344A', ink: '#D5E8F8' }
+      : { bg: '#16304C', ink: night.glowBright };
 
   return (
     <View
@@ -77,12 +77,12 @@ const styles = StyleSheet.create({
   bot: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2A2418',
+    backgroundColor: '#14263A',
     borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: night.ring,
   },
   glyph: {
-    color: colors.gold,
+    color: night.glowBright,
     fontWeight: '700',
   },
 });

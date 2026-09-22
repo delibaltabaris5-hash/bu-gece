@@ -32,13 +32,21 @@ export default function TabLayout() {
         },
         tabBarActiveTintColor: night.glowBright,
         tabBarInactiveTintColor: colors.faint,
+        tabBarAllowFontScaling: false,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+        },
+        tabBarItemStyle: {
+          paddingHorizontal: 0,
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Bu Gece',
-          tabBarIcon: ({ color }) => <TabGlyph glyph="✶" color={color} />,
+          tabBarIcon: ({ color }) => <TabGlyph glyph="☾" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -46,6 +54,13 @@ export default function TabLayout() {
         options={{
           title: 'Odalar',
           tabBarIcon: ({ color }) => <TabGlyph glyph="▣" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="sohbetler"
+        options={{
+          title: 'Sohbetler',
+          tabBarIcon: ({ color }) => <TabGlyph glyph="◉" color={color} />,
         }}
       />
       <Tabs.Screen
