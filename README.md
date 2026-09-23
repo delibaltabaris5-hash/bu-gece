@@ -101,7 +101,7 @@ Tam koruma için kota sunucuda tutulmalı ve hesap Apple, Google veya telefon nu
 - Web, port 8081: `http://localhost:8081`
 - Diğer kayıtlı kökler: `https://localhost`, `http://localhost`, `http://127.0.0.1`, `https://127.0.0.1`
 
-Konsolda `[bu-gece] Google redirectUri` satırı, o çalıştırmada kullanılan adresi yazar. İstek yetkilendirme kodu + PKCE kullanır (`response_type=code`) ve web istemci kimliğini gönderir, çünkü yönlendirme adresleri o istemciye ekli. Yeni bir Gmail adresi 10 mesajla hesap olur. Aynı e-posta kayıtlı sayıyı geri getirir. Google bitmezse Türkçe açıklama çıkar ve e-posta kayıt formu açılır.
+Konsolda `[bu-gece] Google redirectUri` satırı, o çalıştırmada kullanılan adresi yazar. İstek `response_type=id_token` kullanır ve web istemci kimliğini gönderir, çünkü yönlendirme adresleri o istemciye ekli. Web `promptAsync` ile kalır. Expo Go Google’ı doğrudan açmaz: `https://auth.expo.io/@anonymous/bu-gece/start?authUrl=…&returnUrl=…` açılır. `returnUrl`, `Linking.createURL('expo-auth-session')` değeridir. Kimlik belirteci dönüş adresinin sorgu veya parçasındadır; vekil dönüşünde kod takası yoktur. Yeni bir Gmail adresi 10 mesajla hesap olur. Aynı e-posta kayıtlı sayıyı geri getirir. Google bitmezse Türkçe açıklama çıkar ve e-posta kayıt formu açılır.
 
 Expo yalnızca `EXPO_PUBLIC_` ile başlayan değişkenleri uygulamaya koyar.
 
