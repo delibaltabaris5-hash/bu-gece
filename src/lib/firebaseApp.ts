@@ -3,27 +3,33 @@ import { getFirestore, initializeFirestore, memoryLocalCache, type Firestore } f
 
 const PLACEHOLDER = /^(your[-_]|replace|changeme|todo|xxx|paste)/i;
 
+/** Public web app on Firebase project bu-gece. Client config, not a secret. */
+const BU_GECE_WEB = {
+  apiKey: 'AIzaSyBdQN11BwwxNVFImZiK7cz-iltcH73Vtqg',
+  authDomain: 'bu-gece.firebaseapp.com',
+  projectId: 'bu-gece',
+  storageBucket: 'bu-gece.firebasestorage.app',
+  messagingSenderId: '746154431428',
+  appId: '1:746154431428:web:0ba9a25181417a76414a91',
+} as const;
+
 function readEnv(name: string): string {
   const value = (process.env as Record<string, string | undefined>)[name]?.trim() ?? '';
   if (!value || PLACEHOLDER.test(value)) return '';
   return value;
 }
 
-/** Null when the public web config is missing, so the app keeps the local Genel seeds. */
-export function firebaseOptionsFromEnv(): FirebaseOptions | null {
-  const apiKey = readEnv('EXPO_PUBLIC_FIREBASE_API_KEY');
-  const projectId = readEnv('EXPO_PUBLIC_FIREBASE_PROJECT_ID');
-  const appId = readEnv('EXPO_PUBLIC_FIREBASE_APP_ID');
-  if (!apiKey || !projectId || !appId) return null;
-
-  const authDomain = readEnv('EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN') || `${projectId}.firebaseapp.com`;
-  const storageBucket = readEnv('EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET');
-  const messagingSenderId = readEnv('EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID');
+/** EXPO_PUBLIC_FIREBASE_* when set, otherwise the bu-gece web app above. */
+export function firebaseOptionsFromEnv(): FirebaseOptions {
   const measurementId = readEnv('EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID');
-
-  const options: FirebaseOptions = { apiKey, authDomain, projectId, appId };
-  if (storageBucket) options.storageBucket = storageBucket;
-  if (messagingSenderId) options.messagingSenderId = messagingSenderId;
+  const options: FirebaseOptions = {
+    apiKey: readEnv('EXPO_PUBLIC_FIREBASE_API_KEY') || BU_GECE_WEB.apiKey,
+    authDomain: readEnv('EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN') || BU_GECE_WEB.authDomain,
+    projectId: readEnv('EXPO_PUBLIC_FIREBASE_PROJECT_ID') || BU_GECE_WEB.projectId,
+    storageBucket: readEnv('EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET') || BU_GECE_WEB.storageBucket,
+    messagingSenderId: readEnv('EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID') || BU_GECE_WEB.messagingSenderId,
+    appId: readEnv('EXPO_PUBLIC_FIREBASE_APP_ID') || BU_GECE_WEB.appId,
+  };
   if (measurementId) options.measurementId = measurementId;
   return options;
 }
@@ -44,7 +50,6 @@ export function getFirebaseApp(): FirebaseApp | null {
   if (appReady) return app;
   appReady = true;
   const options = firebaseOptionsFromEnv();
-  if (!options) return null;
   try {
     app = getApps()[0] ?? initializeApp(options);
   } catch (error) {

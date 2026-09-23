@@ -115,32 +115,24 @@ Ayarlar’da **Giriş yap**, **Hesabım** ve **Çıkış yap** durur. Yazmak üy
 
 ### Canlı Genel (Firestore)
 
-Sohbetler → Genel, `EXPO_PUBLIC_FIREBASE_*` doluysa `bu-gece` projesindeki Firestore `presence` koleksiyonundan son 20 dakikada `online: true` hesapları gösterir. Her hesap bir kez durur. Başka biri varsa kendi hesabın listelenmez; çevrimiçi tek hesap sensen bir kez görünürsün. Firebase yoksa, dinleyici hata verirse veya liste boşsa ekran `src/data/members.ts` tohumlarına döner. Tohum dosyaları silinmez. Odalar’daki moderatör botları aynı kalır.
+Sohbetler → Genel, `bu-gece` projesindeki Firestore `presence` koleksiyonunu okur (üretim, bölge `europe-west1`). Son 20 dakikada `online: true` hesaplar baloncuk olur. Başka biri varsa kendi hesabın listelenmez; tek çevrimiçi hesap sensen bir kez görünürsün. Dinleyici hata verirse veya liste boşsa ekran `src/data/members.ts` tohumlarına döner. Tohum dosyaları durur.
 
-Üye girişi (`accountId`) ve onboarding (simge + geçici ad) tamamsa uygulama `presence/{accountId}` belgesini yazar: `accountId`, `emailHash` (e-postanın SHA-256’sı), `displayNick` (geçici ad), `gender`, `mood`, `lastSeen`, `online`. `accountId` bugün e-postadır. Ön plana gelince, Sohbetler açılınca, Genel seçilince ve uygulama açıkken yaklaşık 4 dakikada bir `lastSeen` yenilenir. Çıkışta belge `online: false` olur. Uygulama öldürülürse çevrimiçi bayrağı 20 dakika sonra listeden düşer.
+Giriş ve onboarding bitince uygulama `presence/{accountId}` yazar (`accountId` e-postadır): `emailHash`, geçici `displayNick`, `gender`, `mood`, `lastSeen`, `online`. Ön plan, Genel odağı ve yaklaşık 4 dakikalık nabız `lastSeen` yeniler. Çıkış `online: false` yazar.
 
-Expo yalnızca `EXPO_PUBLIC_` ile başlayan değişkenleri uygulamaya koyar. Proje kökündeki `.env` (bu depoda Google istemci kimlikleriyle durur; Firebase anahtarını oraya ekle):
+Web istemci ayarı `.env` ve `.env.example` içindedir. Expo yalnızca `EXPO_PUBLIC_` adlarını alır. Boş değer olursa `src/lib/firebaseApp.ts` aynı bu-gece web uygulamasını kullanır.
 
 ```bash
-EXPO_PUBLIC_FIREBASE_API_KEY=
+EXPO_PUBLIC_FIREBASE_API_KEY=AIzaSyBdQN11BwwxNVFImZiK7cz-iltcH73Vtqg
 EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=bu-gece.firebaseapp.com
 EXPO_PUBLIC_FIREBASE_PROJECT_ID=bu-gece
-EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=
-EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
-EXPO_PUBLIC_FIREBASE_APP_ID=
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=bu-gece.firebasestorage.app
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=746154431428
+EXPO_PUBLIC_FIREBASE_APP_ID=1:746154431428:web:0ba9a25181417a76414a91
 ```
 
-Zorunlu olanlar `EXPO_PUBLIC_FIREBASE_API_KEY`, `EXPO_PUBLIC_FIREBASE_PROJECT_ID` ve `EXPO_PUBLIC_FIREBASE_APP_ID`. `AUTH_DOMAIN` boşsa `{projectId}.firebaseapp.com` kullanılır. Boş veya `your-` ile başlayan değerler yok sayılır; Genel tohumda kalır. Değerler Firebase konsolunda **bu-gece → Project settings → Your apps → Web** kaydındadır. Web uygulaması yoksa aynı projeye bir tane ekle. Kaydettikten sonra `npx expo start` yeniden başlatılır.
+Yayımlanmış kural: `presence/{userId}` için `allow read, write: if true`. Belge kimliği e-posta olduğu için adres ve çevrimiçi durum açıktır. TODO: yazmayı `request.auth.uid == userId` ile kilitle. `firebase.json` Hosting sayfalarını yayınlamaz.
 
-Firestore henüz kapalıysa konsolda **Build → Firestore Database → Create database**. Kurallar `firestore.rules` dosyasındadır. `firebase.json` yalnızca Firestore’u hedefler; Hosting’deki yasal sayfalar bu dosyayla yayınlanmaz.
-
-```bash
-npx firebase-tools deploy --only firestore:rules --project bu-gece
-```
-
-Kurallar MVP için açıktır: `presence` herkese okunur, alan doğrulaması geçen herkes yazabilir, silme kapalıdır, diğer koleksiyonlar kapalıdır. Belge kimliği hesap e-postası olduğu için adres ve çevrimiçi durum herkese açıktır. TODO: Firebase Auth (anonim oturum veya `uid == accountId` özel jeton) bağlanınca yazmayı yalnızca kendi belgesine kilitle. Ayrıntı `firestore.rules` başındaki yorumdadır.
-
-Ruh Hali, canlı listede aynı tempo varsa onları gösterir. O tempoda kimse yoksa tohum eşleşmesi durur.
+Ruh Hali, canlı listede aynı tempo varsa onları gösterir; yoksa tohum eşleşmesi durur.
 
 ## Atmosfer
 
