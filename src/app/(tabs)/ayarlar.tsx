@@ -114,41 +114,49 @@ export default function SettingsScreen() {
           <Text style={styles.body}>
             Bu Gece bir ilgi kulübüdür. Felsefe, tarih, edebiyat, astronomi, sanat, müzik, sinema, bilim, psikoloji ve mitoloji odaları konu içindir.
           </Text>
+        </View>
+
+        <View style={styles.card}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={accountId ? 'Hesabım' : 'Giriş yap'}
+            onPress={() => router.push('/giris')}
+            style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}
+          >
+            <View style={styles.identityCopy}>
+              <Text style={styles.contactLabel}>{accountId ? 'Hesabım' : 'Giriş yap'}</Text>
+              <Text style={styles.meta}>
+                {accountId ? accountName || accountEmail || accountId : 'Üye girişi veya kayıt'}
+              </Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+          {accountId ? (
+            <>
+              <View style={styles.divider} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Çıkış yap"
+                onPress={confirmSignOut}
+                style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}
+              >
+                <Text style={styles.contactLabel}>Çıkış yap</Text>
+                <Text style={styles.chevron}>›</Text>
+              </Pressable>
+            </>
+          ) : null}
+        </View>
+
+        <View style={styles.card}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Oda ve simgeyi sıfırla"
             onPress={confirmReset}
-            style={({ pressed }) => [styles.quietHit, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}
           >
-            <Text style={styles.quiet}>Oda ve simgeyi sıfırla</Text>
+            <Text style={styles.resetLabel}>Oda ve simgeyi sıfırla</Text>
           </Pressable>
         </View>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={accountId ? 'Hesabım' : 'Giriş yap'}
-          onPress={() => router.push('/giris')}
-          style={({ pressed }) => [styles.contact, pressed && styles.pressed]}
-        >
-          <View>
-            <Text style={styles.contactLabel}>{accountId ? 'Hesabım' : 'Giriş yap'}</Text>
-            <Text style={styles.meta}>
-              {accountId ? accountName || accountEmail || accountId : 'Üye girişi veya kayıt'}
-            </Text>
-          </View>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-        {accountId ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Çıkış yap"
-            onPress={confirmSignOut}
-            style={({ pressed }) => [styles.contact, pressed && styles.pressed]}
-          >
-            <Text style={styles.contactLabel}>Çıkış yap</Text>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
-        ) : null}
 
         <Pressable
           accessibilityRole="button"
@@ -224,15 +232,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
   },
-  quietHit: {
-    alignSelf: 'flex-start',
-    minHeight: 32,
-    justifyContent: 'center',
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+    gap: 8,
   },
-  quiet: {
-    color: colors.muted,
-    fontSize: 14,
-    fontWeight: '600',
+  divider: {
+    height: 1,
+    backgroundColor: colors.line,
+  },
+  resetLabel: {
+    color: '#E7A0A8',
+    fontSize: 16,
+    fontWeight: '700',
   },
   contact: {
     flexDirection: 'row',
