@@ -8,5 +8,11 @@ service cloud.firestore {
     match /presence/{userId} {
       allow read, write: if true;
     }
+
+    // MVP: live DMs between two accounts. Same open access as presence.
+    // TODO(auth): require request.auth before production. Thread ids are email pairs.
+    match /dmThreads/{threadId}/messages/{messageId} {
+      allow read, write: if true;
+    }
   }
 }

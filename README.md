@@ -130,7 +130,13 @@ EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=746154431428
 EXPO_PUBLIC_FIREBASE_APP_ID=1:746154431428:web:0ba9a25181417a76414a91
 ```
 
-Yayımlanmış kural: `presence/{userId}` için `allow read, write: if true`. Belge kimliği e-posta olduğu için adres ve çevrimiçi durum açıktır. TODO: yazmayı `request.auth.uid == userId` ile kilitle. `firebase.json` Hosting sayfalarını yayınlamaz.
+Canlı kişiye yazılan mesaj `dmThreads/{emailA__emailB}/messages` içine gider ve karşı cihazda görünür. Tohum kişiler yerel bot yanıtında kalır. Ücretsiz planda canlı mesaj da aynı mesaj hakkını düşürür.
+
+Yayımlanmış kural: `presence/{userId}` ve `dmThreads/{threadId}/messages/{messageId}` için `allow read, write: if true`. Belge kimliği e-posta olduğu için adres, çevrimiçi durum ve mesaj açıktır. TODO: yazmayı Firebase Auth ile kilitle. `firebase.json` Hosting sayfalarını yayınlamaz. Kurallar:
+
+```bash
+npx firebase-tools deploy --only firestore:rules --project bu-gece
+```
 
 Ruh Hali, canlı listede aynı tempo varsa onları gösterir; yoksa tohum eşleşmesi durur.
 

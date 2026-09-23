@@ -18,7 +18,14 @@ import { SilhouetteBubble } from '@/components/ProfileBubble';
 import { PrimaryButton } from '@/components/ui';
 import { getMember, memberFacingName } from '@/data/members';
 import { getRoom } from '@/data/rooms';
-import { cachedLivePerson, fetchLivePerson, presenceFacingName, type LivePerson } from '@/lib/presence';
+import {
+  decodeRouteId,
+  dmThreadId,
+  sendLiveDm,
+  subscribeLiveThread,
+  type LiveDmMessage,
+} from '@/lib/liveDm';
+import { cachedLivePerson, fetchLivePerson, normalizeAccountId, presenceFacingName, type LivePerson } from '@/lib/presence';
 import { useAppStore } from '@/store/useAppStore';
 import { fontFamily, night, radius, space } from '@/theme';
 import type { DirectMessage, Gender } from '@/types';
@@ -27,7 +34,8 @@ export default function SohbetThreadScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string }>();
-  const memberId = typeof params.id === 'string' ? params.id : undefined;
+  const rawId = typeof params.id === 'string' ? params.id : undefined;
+  const memberId = decodeRouteId(rawId);
   const seed = getMember(memberId);
   const isPro = useAppStore((state) => state.isPro);
   const accountId = useAppStore((state) => state.accountId);
@@ -37,9 +45,12 @@ export default function SohbetThreadScreen() {
   const remaining = useAppStore((state) => state.freeMessagesRemaining);
   const thread = useAppStore((state) => (memberId ? state.directMessages[memberId] : undefined));
   const postDirectMessage = useAppStore((state) => state.postDirectMessage);
+  const spendMessageCredit = useAppStore((state) => state.spendMessageCredit);
   const [draft, setDraft] = useState('');
   const [live, setLive] = useState<LivePerson | null>(null);
   const [resolvedFor, setResolvedFor] = useState<string | undefined>(seed ? memberId : undefined);
+  const [liveMessages, setLiveMessages] = useState<LiveDmMessage[]>([]);
+  const [sendError, setSendError] = useState('');
 
   useEffect(() => {
     if (!memberId || seed) {
@@ -64,11 +75,34 @@ export default function SohbetThreadScreen() {
     };
   }, [memberId, seed]);
 
-  const data = useMemo(() => [...(thread ?? [])].reverse(), [thread]);
   const signedIn = Boolean(accountId);
   const quotaBlocked = signedIn && !isPro && remaining <= 0;
   const room = seed ? getRoom(seed.roomId) : undefined;
-  const matchedLive = live?.accountId === memberId ? live : null;
+  const matchedLive =
+    live && memberId && normalizeAccountId(live.accountId) === normalizeAccountId(memberId) ? live : null;
+  const liveThreadId = matchedLive && accountId ? dmThreadId(accountId, matchedLive.accountId) : null;
+
+  useEffect(() => {
+    if (!liveThreadId) {
+      setLiveMessages([]);
+      return;
+    }
+    return subscribeLiveThread(liveThreadId, setLiveMessages);
+  }, [liveThreadId]);
+
+  const data = useMemo(() => {
+    if (!matchedLive || !accountId) return [...(thread ?? [])].reverse();
+    const selfId = normalizeAccountId(accountId);
+    return liveMessages
+      .map((message) => ({
+        id: message.id,
+        memberId: matchedLive.accountId,
+        from: message.fromAccountId === selfId ? ('self' as const) : ('member' as const),
+        text: message.text,
+        createdAt: message.createdAtMs || Date.now(),
+      }))
+      .reverse();
+  }, [accountId, liveMessages, matchedLive, thread]);
   const face = seed
     ? {
         id: seed.id,
@@ -121,7 +155,22 @@ export default function SohbetThreadScreen() {
       return;
     }
     if (quotaBlocked) return;
-    const sent = postDirectMessage(face.id, draft);
+    const text = draft.trim();
+    if (!text) return;
+    if (matchedLive && accountId && liveThreadId) {
+      setDraft('');
+      setSendError('');
+      void sendLiveDm({ selfId: accountId, peerId: matchedLive.accountId, text }).then((messageId) => {
+        if (!messageId) {
+          setDraft(text);
+          setSendError('Mesaj iletilemedi.');
+          return;
+        }
+        spendMessageCredit();
+      });
+      return;
+    }
+    const sent = postDirectMessage(face.id, text);
     if (sent) setDraft('');
   };
 
@@ -179,9 +228,11 @@ export default function SohbetThreadScreen() {
         ) : (
           <>
             <Text style={styles.hint}>
-              {isPro
-                ? 'Pro: sabit ad açık. Sınırsız mesaj.'
-                : `Ücretsiz: ${remaining} mesaj kaldı. Oda ve sohbet aynı hakkı kullanır.`}
+              {sendError
+                ? sendError
+                : isPro
+                  ? 'Pro: sabit ad açık. Sınırsız mesaj.'
+                  : `Ücretsiz: ${remaining} mesaj kaldı. Oda ve sohbet aynı hakkı kullanır.`}
             </Text>
             <View style={styles.composerRow}>
               <TextInput

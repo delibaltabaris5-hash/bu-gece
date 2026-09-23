@@ -54,6 +54,8 @@ interface AppState extends PersistedSlice {
   ensureDailyTopic: (roomId: RoomId) => void;
   postRoomMessage: (roomId: RoomId, text: string) => boolean;
   postDirectMessage: (memberId: string, text: string) => boolean;
+  /** Live Firestore DMs use this so the local bot reply is not sent. */
+  spendMessageCredit: () => boolean;
   setMood: (mood: Mood) => void;
   setAtmosphereVolume: (value: number) => void;
   continueAsGuest: () => void;
@@ -228,6 +230,13 @@ export const useAppStore = create<AppState>()(
         set({ accountId: null, accountEmail: null, accountName: '' });
       },
       setMood: (mood) => set({ mood }),
+      spendMessageCredit: () => {
+        const state = get();
+        if (!state.accountId) return false;
+        if (!state.isPro && state.freeMessagesRemaining <= 0) return false;
+        if (!state.isPro) set({ freeMessagesRemaining: state.freeMessagesRemaining - 1 });
+        return true;
+      },
       postDirectMessage: (memberId, text) => {
         const trimmed = text.trim().slice(0, 400);
         if (!trimmed) return false;

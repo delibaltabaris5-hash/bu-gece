@@ -86,7 +86,7 @@ export default function SohbetlerScreen() {
   }, [phase, secondsLeft]);
 
   const openMember = (id: string) => {
-    router.push(`/sohbet/${id}`);
+    router.push(`/sohbet/${encodeURIComponent(id)}`);
   };
 
   const beginSearch = () => {
