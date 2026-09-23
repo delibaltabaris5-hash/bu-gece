@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -17,6 +18,7 @@ import { SilhouetteBubble } from '@/components/ProfileBubble';
 import { PrimaryButton } from '@/components/ui';
 import { getMember, memberFacingName } from '@/data/members';
 import { getRoom } from '@/data/rooms';
+import { cachedLivePerson, fetchLivePerson, presenceFacingName, type LivePerson } from '@/lib/presence';
 import { useAppStore } from '@/store/useAppStore';
 import { fontFamily, night, radius, space } from '@/theme';
 import type { DirectMessage, Gender } from '@/types';
@@ -25,32 +27,79 @@ export default function SohbetThreadScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string }>();
-  const member = getMember(params.id);
+  const memberId = typeof params.id === 'string' ? params.id : undefined;
+  const seed = getMember(memberId);
   const isPro = useAppStore((state) => state.isPro);
   const accountId = useAppStore((state) => state.accountId);
   const gender = useAppStore((state) => state.gender);
   const stableNick = useAppStore((state) => state.stableNick);
   const tempNick = useAppStore((state) => state.tempNick);
   const remaining = useAppStore((state) => state.freeMessagesRemaining);
-  const thread = useAppStore((state) => (member ? state.directMessages[member.id] : undefined));
+  const thread = useAppStore((state) => (memberId ? state.directMessages[memberId] : undefined));
   const postDirectMessage = useAppStore((state) => state.postDirectMessage);
   const [draft, setDraft] = useState('');
+  const [live, setLive] = useState<LivePerson | null>(null);
+  const [resolvedFor, setResolvedFor] = useState<string | undefined>(seed ? memberId : undefined);
+
+  useEffect(() => {
+    if (!memberId || seed) {
+      setLive(null);
+      setResolvedFor(memberId);
+      return;
+    }
+    const cached = cachedLivePerson(memberId);
+    if (cached) {
+      setLive(cached);
+      setResolvedFor(memberId);
+      return;
+    }
+    let cancel = false;
+    void fetchLivePerson(memberId).then((person) => {
+      if (cancel) return;
+      setLive(person);
+      setResolvedFor(memberId);
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [memberId, seed]);
 
   const data = useMemo(() => [...(thread ?? [])].reverse(), [thread]);
   const signedIn = Boolean(accountId);
   const quotaBlocked = signedIn && !isPro && remaining <= 0;
+  const room = seed ? getRoom(seed.roomId) : undefined;
+  const matchedLive = live?.accountId === memberId ? live : null;
+  const face = seed
+    ? {
+        id: seed.id,
+        gender: seed.gender,
+        label: memberFacingName(seed, isPro),
+        subtitle: isPro
+          ? `${room?.name ?? 'Sohbet'} · ${seed.bio}`
+          : 'Ücretsiz · simge ve geçici numara',
+      }
+    : matchedLive
+      ? {
+          id: matchedLive.accountId,
+          gender: matchedLive.gender,
+          label: presenceFacingName(matchedLive.displayNick, isPro),
+          subtitle: isPro ? 'Çevrimiçi' : 'Ücretsiz · simge ve geçici numara',
+        }
+      : null;
 
-  if (!member) {
+  if (!face) {
     return (
       <View style={styles.missing}>
-        <Text style={styles.missingText}>Kişi bulunamadı.</Text>
+        {resolvedFor !== memberId ? (
+          <ActivityIndicator color={night.glowBright} />
+        ) : (
+          <Text style={styles.missingText}>Kişi bulunamadı.</Text>
+        )}
       </View>
     );
   }
 
-  const room = getRoom(member.roomId);
   const selfGender: Gender = gender ?? 'kadin';
-  const label = memberFacingName(member, isPro);
   const selfName = isPro ? stableNick || 'Sen' : tempNick || 'Sen';
 
   const renderItem = ({ item }: { item: DirectMessage }) => {
@@ -58,8 +107,8 @@ export default function SohbetThreadScreen() {
     return (
       <MessageBubble
         mine={mine}
-        gender={mine ? selfGender : member.gender}
-        name={mine ? selfName : label}
+        gender={mine ? selfGender : face.gender}
+        name={mine ? selfName : face.label}
         text={item.text}
         createdAt={item.createdAt}
       />
@@ -72,7 +121,7 @@ export default function SohbetThreadScreen() {
       return;
     }
     if (quotaBlocked) return;
-    const sent = postDirectMessage(member.id, draft);
+    const sent = postDirectMessage(face.id, draft);
     if (sent) setDraft('');
   };
 
@@ -87,10 +136,8 @@ export default function SohbetThreadScreen() {
         </Pressable>
         <SilhouetteBubble diameter={42} />
         <View style={styles.headerCopy}>
-          <Text style={styles.title}>{label}</Text>
-          <Text style={styles.subtitle}>
-            {isPro ? `${room?.name ?? 'Sohbet'} · ${member.bio}` : 'Ücretsiz · simge ve geçici numara'}
-          </Text>
+          <Text style={styles.title}>{face.label}</Text>
+          <Text style={styles.subtitle}>{face.subtitle}</Text>
         </View>
       </View>
 

@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // TODO(auth): Bu Gece accounts live in SecureStore (accountId is the email), not
+    // Firebase Auth, so request.auth.uid cannot be required yet. These rules are
+    // temporarily open for the presence collection.
+    //
+    // MVP risk: anyone who can reach project `bu-gece` can read every presence doc.
+    // The document id is the account email, so the address and online state are public.
+    // The same caller can overwrite any presence/{accountId}. Field checks below only
+    // stop malformed documents; they do not prove the writer owns the id.
+    //
+    // Before production, sign in with Firebase Auth (anonymous, or a custom token whose
+    // uid equals accountId) and replace the create/update rule with:
+    //   allow create, update: if request.auth != null
+    //     && request.auth.uid == accountId
+    //     && validPresence(accountId);
+    function validPresence(accountId) {
+      let data = request.resource.data;
+      return accountId.size() > 3
+        && accountId.size() < 320
+        && data.keys().hasOnly(['accountId', 'emailHash', 'displayNick', 'gender', 'mood', 'lastSeen', 'online'])
+        && data.accountId == accountId
+        && data.emailHash is string
+        && data.emailHash.size() == 64
+        && data.displayNick is string
+        && data.displayNick.size() > 0
+        && data.displayNick.size() < 80
+        && data.gender in ['kadin', 'erkek']
+        && (data.mood == null || data.mood in ['sakin', 'merakli', 'sosyal', 'derin', 'neseli'])
+        && data.lastSeen is timestamp
+        && data.online is bool;
+    }
+
+    match /presence/{accountId} {
+      allow read: if true;
+      allow create, update: if validPresence(accountId);
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -64,7 +64,7 @@ cd android && ./gradlew assembleDebug
 4. Ücretsiz kullanıcı odaya 10 mesaj yazabilir. Bir kişiye dokununca yalnızca simge ve `Felsefe_4821` gibi geçici numara görünür. Doğrudan mesaj duvara düşer.
 5. **Pro’yu aç** kilidi bu cihazda açar. Profiller ve doğrudan mesaj kullanılabilir. **Ayarlar** içinden Pro kapatılabilir.
 
-Sohbet, planlar ve satın alma bu sürümde cihazın içindedir. Sunucu, push ve gerçek ödeme yoktur.
+Sohbet mesajları, planlar ve satın alma bu sürümde cihazın içindedir. Sohbetler → Genel, Firebase yapılandırılmışsa Firestore’daki çevrimiçi hesapları okur; değilse tohum listesi durur. Push ve gerçek ödeme yoktur.
 
 ## Ücretsiz ve Pro
 
@@ -113,6 +113,35 @@ OAuth izin ekranı şu an **External / Testing**. Test kullanıcıları: `canasl
 
 Ayarlar’da **Giriş yap**, **Hesabım** ve **Çıkış yap** durur. Yazmak üye hesabı ister.
 
+### Canlı Genel (Firestore)
+
+Sohbetler → Genel, `EXPO_PUBLIC_FIREBASE_*` doluysa `bu-gece` projesindeki Firestore `presence` koleksiyonundan son 20 dakikada `online: true` hesapları gösterir. Her hesap bir kez durur. Başka biri varsa kendi hesabın listelenmez; çevrimiçi tek hesap sensen bir kez görünürsün. Firebase yoksa, dinleyici hata verirse veya liste boşsa ekran `src/data/members.ts` tohumlarına döner. Tohum dosyaları silinmez. Odalar’daki moderatör botları aynı kalır.
+
+Üye girişi (`accountId`) ve onboarding (simge + geçici ad) tamamsa uygulama `presence/{accountId}` belgesini yazar: `accountId`, `emailHash` (e-postanın SHA-256’sı), `displayNick` (geçici ad), `gender`, `mood`, `lastSeen`, `online`. `accountId` bugün e-postadır. Ön plana gelince, Sohbetler açılınca, Genel seçilince ve uygulama açıkken yaklaşık 4 dakikada bir `lastSeen` yenilenir. Çıkışta belge `online: false` olur. Uygulama öldürülürse çevrimiçi bayrağı 20 dakika sonra listeden düşer.
+
+Expo yalnızca `EXPO_PUBLIC_` ile başlayan değişkenleri uygulamaya koyar. Proje kökündeki `.env` (bu depoda Google istemci kimlikleriyle durur; Firebase anahtarını oraya ekle):
+
+```bash
+EXPO_PUBLIC_FIREBASE_API_KEY=
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=bu-gece.firebaseapp.com
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=bu-gece
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+EXPO_PUBLIC_FIREBASE_APP_ID=
+```
+
+Zorunlu olanlar `EXPO_PUBLIC_FIREBASE_API_KEY`, `EXPO_PUBLIC_FIREBASE_PROJECT_ID` ve `EXPO_PUBLIC_FIREBASE_APP_ID`. `AUTH_DOMAIN` boşsa `{projectId}.firebaseapp.com` kullanılır. Boş veya `your-` ile başlayan değerler yok sayılır; Genel tohumda kalır. Değerler Firebase konsolunda **bu-gece → Project settings → Your apps → Web** kaydındadır. Web uygulaması yoksa aynı projeye bir tane ekle. Kaydettikten sonra `npx expo start` yeniden başlatılır.
+
+Firestore henüz kapalıysa konsolda **Build → Firestore Database → Create database**. Kurallar `firestore.rules` dosyasındadır. `firebase.json` yalnızca Firestore’u hedefler; Hosting’deki yasal sayfalar bu dosyayla yayınlanmaz.
+
+```bash
+npx firebase-tools deploy --only firestore:rules --project bu-gece
+```
+
+Kurallar MVP için açıktır: `presence` herkese okunur, alan doğrulaması geçen herkes yazabilir, silme kapalıdır, diğer koleksiyonlar kapalıdır. Belge kimliği hesap e-postası olduğu için adres ve çevrimiçi durum herkese açıktır. TODO: Firebase Auth (anonim oturum veya `uid == accountId` özel jeton) bağlanınca yazmayı yalnızca kendi belgesine kilitle. Ayrıntı `firestore.rules` başındaki yorumdadır.
+
+Ruh Hali, canlı listede aynı tempo varsa onları gösterir. O tempoda kimse yoksa tohum eşleşmesi durur.
+
 ## Atmosfer
 
 Arka plan döngüsü **Echoes of Solitude** (Discomfuse). Parça [Pixabay](https://pixabay.com/music/main-title-echoes-of-solitude-277006/) üzerindedir ve **Pixabay Content License** ile kullanılır. Dosya: `assets/audio/echoes-of-solitude.mp3`. Uygulama açılınca ses yaklaşık 0.15’te başlar; **Müziği yükselt** ve **Müziği kıs** seçimi cihazda kalır. Hans Zimmer kaydı yoktur.
@@ -121,6 +150,7 @@ Arka plan döngüsü **Echoes of Solitude** (Discomfuse). Parça [Pixabay](https
 
 - Expo SDK 57, React Native, TypeScript, Expo Router
 - Zustand + AsyncStorage, ücretsiz kota için ek olarak `expo-secure-store` ve `expo-application`
+- Firebase JS SDK (`firebase` 12). Firestore presence. Yapılandırma yoksa Genel tohum listesinde kalır. Expo Go ile çalışır; React Native Firebase kullanılmaz
 - `src/app` ekranlar, `src/data` odalar ve konular, `src/store` durum, `src/billing` ödeme sınırı
 
 ```bash
