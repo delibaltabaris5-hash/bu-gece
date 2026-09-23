@@ -65,7 +65,7 @@ export default function RoomScreen() {
         <MessageBubble
           bot
           glyph={room.mark}
-          name={`${room.name} Bot`}
+          name={`Bot · ${room.name}`}
           text={item.text}
           createdAt={item.createdAt}
           mine={false}
@@ -126,8 +126,9 @@ export default function RoomScreen() {
             <Crescent size={18} cutoutColor={colors.bg} />
           </View>
           <Text style={styles.subtitle}>
-            {room.name} Bot · {!signedIn ? 'Üye girişi gerekli' : isPro ? 'Pro' : `Ücretsiz · ${Math.max(0, freeMessagesRemaining)} mesaj`}
+            Bot · {room.name} · {!signedIn ? 'Üye girişi gerekli' : isPro ? 'Pro' : `Ücretsiz · ${Math.max(0, freeMessagesRemaining)} mesaj`}
           </Text>
+          <Text style={styles.botNote}>Bu odada bir bot da yazıyor.</Text>
         </View>
       </View>
 
@@ -231,6 +232,11 @@ const styles = StyleSheet.create({
   subtitle: {
     color: colors.muted,
     fontSize: 13,
+  },
+  botNote: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 2,
   },
   pin: {
     marginHorizontal: space.lg,

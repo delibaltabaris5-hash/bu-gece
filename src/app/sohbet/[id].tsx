@@ -138,11 +138,14 @@ export default function SohbetThreadScreen() {
 
   const renderItem = ({ item }: { item: DirectMessage }) => {
     const mine = item.from === 'self';
+    const autoBot = Boolean(seed) && !mine;
     return (
       <MessageBubble
         mine={mine}
+        bot={autoBot}
+        glyph={room?.mark ?? '✶'}
         gender={mine ? selfGender : face.gender}
-        name={mine ? selfName : face.label}
+        name={mine ? selfName : autoBot ? `${face.label} · bot` : face.label}
         text={item.text}
         createdAt={item.createdAt}
       />
@@ -187,6 +190,7 @@ export default function SohbetThreadScreen() {
         <View style={styles.headerCopy}>
           <Text style={styles.title}>{face.label}</Text>
           <Text style={styles.subtitle}>{face.subtitle}</Text>
+          {seed ? <Text style={styles.subtitle}>Sohbetinize bot eşlik ediyor.</Text> : null}
         </View>
       </View>
 

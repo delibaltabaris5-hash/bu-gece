@@ -53,8 +53,10 @@ export default function DirectScreen() {
     return (
       <MessageBubble
         mine={mine}
+        bot={!mine}
+        glyph={room?.mark ?? '✶'}
         gender={mine ? selfGender : member.gender}
-        name={mine ? stableNick || 'Sen' : member.stableNick}
+        name={mine ? stableNick || 'Sen' : `${member.stableNick} · bot`}
         text={item.text}
         createdAt={item.createdAt}
       />
@@ -78,6 +80,7 @@ export default function DirectScreen() {
         <View style={styles.headerCopy}>
           <Text style={styles.title}>{member.stableNick}</Text>
           <Text style={styles.subtitle}>Doğrudan mesaj · {room?.name}</Text>
+          <Text style={styles.subtitle}>Sohbetinize bot eşlik ediyor.</Text>
         </View>
       </View>
       {data.length === 0 ? (
