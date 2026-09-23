@@ -115,9 +115,9 @@ Ayarlar’da **Giriş yap**, **Hesabım** ve **Çıkış yap** durur. Yazmak üy
 
 ### Canlı Genel (Firestore)
 
-Sohbetler → Genel, `bu-gece` projesindeki Firestore `presence` koleksiyonunu okur (üretim, bölge `europe-west1`). Son 20 dakikada `online: true` hesaplar baloncuk olur. Başka biri varsa kendi hesabın listelenmez; tek çevrimiçi hesap sensen bir kez görünürsün. Dinleyici hata verirse veya liste boşsa ekran `src/data/members.ts` tohumlarına döner. Tohum dosyaları durur.
+Sohbetler → Genel, `bu-gece` projesindeki Firestore `presence` koleksiyonunu okur (üretim, bölge `europe-west1`). Son 20 dakikadaki `lastSeen` baloncuk olur; `online: false` tek başına düşürmez. Başka biri varsa kendi hesabın listelenmez; tek hesap sensen bir kez görünürsün. Canlı liste varsa altında `Canlı · N kişi` yazar. Dinleyici hata verirse veya liste boşsa ekran `src/data/members.ts` tohumlarına döner. Tohum dosyaları durur.
 
-Giriş ve onboarding bitince uygulama `presence/{accountId}` yazar (`accountId` e-postadır): `emailHash`, geçici `displayNick`, `gender`, `mood`, `lastSeen`, `online`. Ön plan, Genel odağı ve yaklaşık 4 dakikalık nabız `lastSeen` yeniler. Çıkış `online: false` yazar.
+Giriş ve onboarding bitince uygulama `presence/{accountId}` yazar (`accountId` küçük harf e-postadır): `emailHash`, geçici `displayNick`, `gender`, `mood`, `lastSeen`, `online: true`. Ön plan, Genel odağı ve yaklaşık 4 dakikalık nabız bunu yeniler. Yalnızca çıkış veya başka hesaba geçiş `lastSeen` değerini pencerenin dışına alır.
 
 Web istemci ayarı `.env` ve `.env.example` içindedir. Expo yalnızca `EXPO_PUBLIC_` adlarını alır. Boş değer olursa `src/lib/firebaseApp.ts` aynı bu-gece web uygulamasını kullanır.
 

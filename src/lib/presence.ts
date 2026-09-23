@@ -80,11 +80,16 @@ function lastSeenMillis(value: unknown): number {
   return 0;
 }
 
+export function normalizeAccountId(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export function parsePresence(id: string, data: DocumentData): LivePerson | null {
   const gender = asGender(data.gender);
   const displayNick = typeof data.displayNick === 'string' ? data.displayNick.trim() : '';
-  const accountId = typeof data.accountId === 'string' ? data.accountId.trim() : '';
-  if (!id || id.includes('/') || !gender || !displayNick || accountId !== id) return null;
+  const accountId = typeof data.accountId === 'string' ? normalizeAccountId(data.accountId) : '';
+  const docId = normalizeAccountId(id);
+  if (!docId || docId.includes('/') || !gender || !displayNick || accountId !== docId) return null;
   return {
     accountId,
     displayNick: displayNick.slice(0, 79),
@@ -96,8 +101,8 @@ export function parsePresence(id: string, data: DocumentData): LivePerson | null
 }
 
 /**
- * Each account once. Includes the signed-in user when they are the document,
- * so a single live session is not dropped. Callers that want others only can filter.
+ * Each account once. A recent lastSeen stays visible even if online was flipped
+ * false by a session flicker. Sign-out ages lastSeen so the account drops immediately.
  */
 export function visibleLivePeople(
   people: LivePerson[],
@@ -108,9 +113,10 @@ export function visibleLivePeople(
   const seen = new Set<string>();
   const next: LivePerson[] = [];
   for (const person of people) {
-    if (!person.online || person.lastSeenMs < cutoff) continue;
-    if (seen.has(person.accountId)) continue;
-    seen.add(person.accountId);
+    if (person.lastSeenMs < cutoff) continue;
+    const accountId = normalizeAccountId(person.accountId);
+    if (!accountId || seen.has(accountId)) continue;
+    seen.add(accountId);
     next.push(person);
   }
   return next;
@@ -138,7 +144,7 @@ async function hashEmail(email: string): Promise<string | null> {
 }
 
 function presenceDocId(accountId: string): string | null {
-  const id = accountId.trim();
+  const id = normalizeAccountId(accountId);
   if (!id || id.includes('/') || id.length > 320) return null;
   return id;
 }
@@ -175,9 +181,11 @@ export async function markPresenceOffline(accountId: string): Promise<void> {
   const id = presenceDocId(accountId);
   if (!database || !id) return;
   try {
+    // Epoch lastSeen falls outside the live window on the next snapshot.
+    // Refreshing lastSeen here would keep a signed-out account visible.
     await setDoc(
       doc(database, PRESENCE_COLLECTION, id),
-      { online: false, lastSeen: serverTimestamp() },
+      { online: false, lastSeen: Timestamp.fromMillis(0) },
       { merge: true },
     );
   } catch (error) {

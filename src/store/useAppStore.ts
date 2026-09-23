@@ -11,6 +11,7 @@ import { topicForDay } from '@/data/topics';
 import { topicBody, todayKey } from '@/lib/format';
 import { pickStableNick, pickTempNumber } from '@/lib/identity';
 import { ATMOSPHERE_DEFAULT_VOLUME, clampAtmosphereVolume } from '@/lib/atmosphere';
+import { markPresenceOffline } from '@/lib/presence';
 import { FREE_MESSAGE_QUOTA } from '@/lib/quota';
 import type {
   ChatMessage,
@@ -221,7 +222,11 @@ export const useAppStore = create<AppState>()(
         set({ atmosphereVolume: clampAtmosphereVolume(value) });
       },
       continueAsGuest: () => set({ authStepDone: true }),
-      signOut: () => set({ accountId: null, accountEmail: null, accountName: '' }),
+      signOut: () => {
+        const id = get().accountId;
+        if (id) void markPresenceOffline(id);
+        set({ accountId: null, accountEmail: null, accountName: '' });
+      },
       setMood: (mood) => set({ mood }),
       postDirectMessage: (memberId, text) => {
         const trimmed = text.trim().slice(0, 400);

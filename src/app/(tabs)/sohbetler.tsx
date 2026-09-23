@@ -109,6 +109,9 @@ export default function SohbetlerScreen() {
         {segment === 'genel' ? (
           <>
             <Text style={styles.quota}>{quotaLabel(remaining, isPro, Boolean(accountId))}</Text>
+            {livePeople && livePeople.length > 0 ? (
+              <Text style={styles.liveCaption}>Canlı · {livePeople.length} kişi</Text>
+            ) : null}
             {!accountId ? (
               <Pressable accessibilityRole="button" onPress={() => router.push('/giris')} style={styles.payStrip}>
                 <Text style={styles.payStripText}>Yazmak için üye girişi</Text>
@@ -393,6 +396,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     marginTop: 8,
+    fontFamily: fontFamily.sans,
+  },
+  liveCaption: {
+    color: night.muted,
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 2,
+    opacity: 0.8,
     fontFamily: fontFamily.sans,
   },
   payStrip: {

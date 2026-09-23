@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 
 import {
   markPresenceOffline,
+  normalizeAccountId,
   publishPresence,
   subscribeRecentPresence,
   visibleLivePeople,
@@ -25,7 +26,11 @@ export function touchPresence(): void {
   });
 }
 
-/** Writes presence while an account is on screen, and marks the previous id offline on sign-out. */
+/**
+ * Heartbeat while an account is on screen. Going null (sign-out flicker, quota
+ * reconcile) does not mark anyone offline. A real sign-out calls markPresenceOffline
+ * itself. Switching to a different non-empty account does.
+ */
 export function usePresenceSession(): void {
   const hydrated = useAppStore((state) => state.hydrated);
   const accountId = useAppStore((state) => state.accountId);
@@ -36,9 +41,10 @@ export function usePresenceSession(): void {
 
   useEffect(() => {
     if (!hydrated) return;
+    const next = accountId ? normalizeAccountId(accountId) : '';
     const previous = previousAccountId;
-    previousAccountId = accountId;
-    if (previous && previous !== accountId) void markPresenceOffline(previous);
+    if (previous && next && previous !== next) void markPresenceOffline(previous);
+    if (next) previousAccountId = next;
     if (accountId && gender && tempNick.trim()) touchPresence();
   }, [hydrated, accountId, accountEmail, gender, mood, tempNick]);
 
@@ -78,7 +84,8 @@ export function useLivePresence(): LivePerson[] | null {
   return useMemo(() => {
     if (!people) return null;
     if (!accountId) return people;
-    const others = people.filter((person) => person.accountId !== accountId);
+    const selfId = normalizeAccountId(accountId);
+    const others = people.filter((person) => normalizeAccountId(person.accountId) !== selfId);
     // Others are listed without you. If you are the only live account, show yourself once
     // so the sky stays on live data instead of dropping back to the seed list.
     return others.length > 0 ? others : people;
