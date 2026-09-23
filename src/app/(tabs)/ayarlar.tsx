@@ -30,8 +30,8 @@ export default function SettingsScreen() {
 
   const confirmReset = () => {
     Alert.alert(
-      'Kimliği sıfırla',
-      'Oda ve simge seçimin silinir. Sohbet geçmişi bu cihazda kalır.',
+      'Oda ve simgeyi sıfırla',
+      'Bu üye hesabını silmez ve çıkış yapmaz. Yalnızca oda ve simge seçimin silinir. Sohbet geçmişi bu cihazda kalır.',
       [
         { text: 'Vazgeç', style: 'cancel' },
         {
@@ -40,6 +40,24 @@ export default function SettingsScreen() {
           onPress: () => {
             resetIdentity();
             router.replace('/onboarding');
+          },
+        },
+      ],
+    );
+  };
+
+  const confirmSignOut = () => {
+    Alert.alert(
+      'Çıkış yap',
+      'Oturum kapanır. Oda, simge ve sohbetlerin bu cihazda kalır. Hesabın silinmez.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Çıkış yap',
+          style: 'destructive',
+          onPress: () => {
+            void writeSessionAccountId(null);
+            signOut();
           },
         },
       ],
@@ -96,7 +114,14 @@ export default function SettingsScreen() {
           <Text style={styles.body}>
             Bu Gece bir ilgi kulübüdür. Felsefe, tarih, edebiyat, astronomi, sanat, müzik, sinema, bilim, psikoloji ve mitoloji odaları konu içindir.
           </Text>
-          <SecondaryButton label="Kimliği sıfırla" onPress={confirmReset} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Oda ve simgeyi sıfırla"
+            onPress={confirmReset}
+            style={({ pressed }) => [styles.quietHit, pressed && styles.pressed]}
+          >
+            <Text style={styles.quiet}>Oda ve simgeyi sıfırla</Text>
+          </Pressable>
         </View>
 
         <Pressable
@@ -117,10 +142,7 @@ export default function SettingsScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Çıkış yap"
-            onPress={() => {
-              void writeSessionAccountId(null);
-              signOut();
-            }}
+            onPress={confirmSignOut}
             style={({ pressed }) => [styles.contact, pressed && styles.pressed]}
           >
             <Text style={styles.contactLabel}>Çıkış yap</Text>
@@ -201,6 +223,16 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 14,
     lineHeight: 21,
+  },
+  quietHit: {
+    alignSelf: 'flex-start',
+    minHeight: 32,
+    justifyContent: 'center',
+  },
+  quiet: {
+    color: colors.muted,
+    fontSize: 14,
+    fontWeight: '600',
   },
   contact: {
     flexDirection: 'row',
