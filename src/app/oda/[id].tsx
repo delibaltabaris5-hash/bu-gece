@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -7,12 +7,12 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Crescent } from '@/components/Crescent';
+import { ChatComposer } from '@/components/ChatComposer';
 import { MessageBubble } from '@/components/MessageBubble';
 import { getMember } from '@/data/members';
 import { getRoom } from '@/data/rooms';
@@ -36,7 +36,6 @@ export default function RoomScreen() {
   const gender = useAppStore((state) => state.gender);
   const tempNick = useAppStore((state) => state.tempNick);
   const stableNick = useAppStore((state) => state.stableNick);
-  const [draft, setDraft] = useState('');
 
   useEffect(() => {
     if (room) ensureDailyTopic(room.id);
@@ -65,7 +64,7 @@ export default function RoomScreen() {
         <MessageBubble
           bot
           glyph={room.mark}
-          name={`Bot · ${room.name}`}
+          name={room.name}
           text={item.text}
           createdAt={item.createdAt}
           mine={false}
@@ -101,20 +100,19 @@ export default function RoomScreen() {
   const signedIn = Boolean(accountId);
   const quotaBlocked = signedIn && !isPro && freeMessagesRemaining <= 0;
 
-  const send = () => {
+  const send = (text: string) => {
     if (!signedIn) {
       router.push('/giris');
-      return;
+      return false;
     }
-    if (quotaBlocked) return;
-    const sent = postRoomMessage(room.id, draft);
-    if (sent) setDraft('');
+    if (quotaBlocked) return false;
+    return postRoomMessage(room.id, text);
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'android' ? undefined : 'padding'}
     >
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Geri" onPress={() => router.back()}>
@@ -147,43 +145,25 @@ export default function RoomScreen() {
         keyboardShouldPersistTaps="handled"
       />
 
-      <View style={styles.composer}>
-        <Text style={styles.hint}>
-          {!signedIn
-            ? 'Misafir gezinebilir. Yazmak için üye girişi gerekir.'
-            : isPro
-            ? 'Pro: sabit adlar açık. Odaya herkes yazabilir.'
-            : quotaBlocked
-              ? 'Ücretsiz mesaj hakkın doldu. Pro sınırsız yazar.'
-              : `Ücretsiz: ${freeMessagesRemaining} mesaj kaldı. Simge ve geçici numara.`}
-        </Text>
-        {!signedIn ? (
+      {!signedIn ? (
+        <View style={styles.composer}>
           <Pressable accessibilityRole="button" onPress={() => router.push('/giris')} style={styles.loginCta}>
             <Text style={styles.sendLabel}>Üye girişi</Text>
           </Pressable>
-        ) : (
-          <View style={styles.composerRow}>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Odaya bir cümle bırak"
-              placeholderTextColor={colors.faint}
-              style={styles.input}
-              maxLength={400}
-              multiline
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Gönder"
-              disabled={!draft.trim() || quotaBlocked}
-              onPress={send}
-              style={[styles.send, (!draft.trim() || quotaBlocked) && styles.sendOff]}
-            >
-              <Text style={styles.sendLabel}>Gönder</Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
+        </View>
+      ) : (
+        <ChatComposer
+          disabled={quotaBlocked}
+          hint={
+            quotaBlocked
+              ? 'Ücretsiz mesaj hakkın doldu. Pro sınırsız yazar.'
+              : isPro
+                ? 'Pro: sabit adlar açık.'
+                : `Ücretsiz: ${freeMessagesRemaining} mesaj kaldı.`
+          }
+          onSend={send}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }

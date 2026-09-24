@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist, type PersistStorage } from 'zustand/middleware';
 
 import { purchasePro } from '@/billing/mockProBilling';
-import { botReply, dmReply } from '@/data/bot';
+import { BOT_UNAVAILABLE, replyAsBot, type BotTurn } from '@/lib/botService';
 import { assertCatalog } from '@/data/catalog';
 import { getRoom } from '@/data/rooms';
 import { buildSeedMessages } from '@/data/seedMessages';
@@ -174,12 +174,11 @@ export const useAppStore = create<AppState>()(
         });
       },
       postRoomMessage: (roomId, text) => {
-        const trimmed = text.trim().slice(0, 400);
+        const trimmed = text.trim().slice(0, 2000);
         if (!trimmed) return false;
         const state = get();
         if (!state.accountId) return false;
         if (!state.isPro && state.freeMessagesRemaining <= 0) return false;
-        const room = getRoom(roomId);
         const now = Date.now();
         const current = state.roomMessages[roomId] ?? [];
         const userMessage: ChatMessage = {
@@ -198,26 +197,51 @@ export const useAppStore = create<AppState>()(
             [roomId]: trimThread([...current, userMessage]),
           },
         });
-        const selfCount = current.filter((item) => item.authorKind === 'self').length;
-        const asked = trimmed.includes('?');
-        if (!asked && selfCount % 2 === 1) return true;
-        const replyText = botReply(room?.name ?? 'Oda', selfCount + trimmed.length);
-        setTimeout(() => {
-          const latest = get().roomMessages[roomId] ?? [];
-          const reply: ChatMessage = {
-            id: `bot_reply_${roomId}_${Date.now()}`,
-            roomId,
-            authorKind: 'bot',
-            text: replyText,
-            createdAt: Date.now(),
-          };
-          set({
-            roomMessages: {
-              ...get().roomMessages,
-              [roomId]: trimThread([...latest, reply]),
-            },
+        const history: BotTurn[] = current.slice(-24).map((item) => ({
+          role: item.authorKind === 'bot' ? 'bot' : 'user',
+          text: item.text,
+        }));
+        const userName = state.accountName || state.tempNick || 'sen';
+        void replyAsBot({
+          botId: `bot-${roomId}`,
+          userId: state.accountId,
+          userName,
+          history,
+          text: trimmed,
+        })
+          .then((replyText) => {
+            if (!replyText) return;
+            const latest = get().roomMessages[roomId] ?? [];
+            const reply: ChatMessage = {
+              id: `bot_reply_${roomId}_${Date.now()}`,
+              roomId,
+              authorKind: 'bot',
+              text: replyText,
+              createdAt: Date.now(),
+            };
+            set({
+              roomMessages: {
+                ...get().roomMessages,
+                [roomId]: trimThread([...latest, reply]),
+              },
+            });
+          })
+          .catch(() => {
+            const latest = get().roomMessages[roomId] ?? [];
+            const reply: ChatMessage = {
+              id: `bot_fail_${roomId}_${Date.now()}`,
+              roomId,
+              authorKind: 'bot',
+              text: BOT_UNAVAILABLE,
+              createdAt: Date.now(),
+            };
+            set({
+              roomMessages: {
+                ...get().roomMessages,
+                [roomId]: trimThread([...latest, reply]),
+              },
+            });
           });
-        }, 800);
         return true;
       },
       setAtmosphereVolume: (value) => {
@@ -238,7 +262,7 @@ export const useAppStore = create<AppState>()(
         return true;
       },
       postDirectMessage: (memberId, text) => {
-        const trimmed = text.trim().slice(0, 400);
+        const trimmed = text.trim().slice(0, 2000);
         if (!trimmed) return false;
         const state = get();
         if (!state.accountId) return false;
@@ -261,23 +285,50 @@ export const useAppStore = create<AppState>()(
             [memberId]: trimThread([...current, mine]),
           },
         });
-        const replyText = dmReply(current.length + trimmed.length);
-        setTimeout(() => {
-          const latest = get().directMessages[memberId] ?? [];
-          const reply: DirectMessage = {
-            id: `dm_member_${memberId}_${Date.now()}`,
-            memberId,
-            from: 'member',
-            text: replyText,
-            createdAt: Date.now(),
-          };
-          set({
-            directMessages: {
-              ...get().directMessages,
-              [memberId]: trimThread([...latest, reply]),
-            },
+        const history: BotTurn[] = current.slice(-24).map((item) => ({
+          role: item.from === 'self' ? 'user' : 'bot',
+          text: item.text,
+        }));
+        void replyAsBot({
+          botId: `bot-${memberId}`,
+          userId: state.accountId,
+          userName: state.accountName || state.tempNick || 'sen',
+          history,
+          text: trimmed,
+        })
+          .then((replyText) => {
+            if (!replyText) return;
+            const latest = get().directMessages[memberId] ?? [];
+            const reply: DirectMessage = {
+              id: `dm_bot_${memberId}_${Date.now()}`,
+              memberId,
+              from: 'bot',
+              text: replyText,
+              createdAt: Date.now(),
+            };
+            set({
+              directMessages: {
+                ...get().directMessages,
+                [memberId]: trimThread([...latest, reply]),
+              },
+            });
+          })
+          .catch(() => {
+            const latest = get().directMessages[memberId] ?? [];
+            const reply: DirectMessage = {
+              id: `dm_bot_fail_${memberId}_${Date.now()}`,
+              memberId,
+              from: 'bot',
+              text: BOT_UNAVAILABLE,
+              createdAt: Date.now(),
+            };
+            set({
+              directMessages: {
+                ...get().directMessages,
+                [memberId]: trimThread([...latest, reply]),
+              },
+            });
           });
-        }, 700);
         return true;
       },
     }),

@@ -14,6 +14,8 @@ interface MessageBubbleProps {
   glyph?: string;
   gender?: Gender;
   onPressAuthor?: () => void;
+  status?: 'sending' | 'sent' | 'failed';
+  onRetry?: () => void;
 }
 
 export function MessageBubble({
@@ -25,6 +27,8 @@ export function MessageBubble({
   glyph = '✶',
   gender = 'kadin',
   onPressAuthor,
+  status,
+  onRetry,
 }: MessageBubbleProps) {
   const author = (
     <View style={styles.authorRow}>
@@ -32,6 +36,7 @@ export function MessageBubble({
       <Text style={styles.name} numberOfLines={1}>
         {name}
       </Text>
+      {bot ? <Text style={styles.botTag}>bot</Text> : null}
     </View>
   );
 
@@ -46,7 +51,12 @@ export function MessageBubble({
       )}
       <View style={[styles.bubble, mine && styles.bubbleMine, bot && styles.bubbleBot]}>
         <Text style={styles.text}>{text}</Text>
-        <Text style={styles.time}>{formatClock(createdAt)}</Text>
+        <Text style={styles.time}>{status === 'sending' ? 'gönderiliyor' : status === 'failed' ? 'iletilemedi' : formatClock(createdAt)}</Text>
+        {status === 'failed' && onRetry ? (
+          <Pressable accessibilityRole="button" onPress={onRetry}>
+            <Text style={styles.retry}>Tekrar gönder</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -72,6 +82,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     flexShrink: 1,
   },
+  botTag: {
+    color: colors.gold,
+    fontSize: 11,
+    fontWeight: '700',
+  },
   bubble: {
     maxWidth: '86%',
     backgroundColor: colors.card,
@@ -96,5 +111,10 @@ const styles = StyleSheet.create({
     color: colors.faint,
     fontSize: 11,
     alignSelf: 'flex-end',
+  },
+  retry: {
+    color: colors.gold,
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

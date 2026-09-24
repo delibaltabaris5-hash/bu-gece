@@ -24,6 +24,8 @@ const PRESENCE_QUERY_LIMIT = 40;
 
 export type LivePerson = {
   accountId: string;
+  /** Exact Firebase uid. Presence doc ids are lowercased, so chat membership uses this. */
+  uid: string;
   displayNick: string;
   gender: Gender;
   mood: Mood | null;
@@ -90,8 +92,10 @@ export function parsePresence(id: string, data: DocumentData): LivePerson | null
   const accountId = typeof data.accountId === 'string' ? normalizeAccountId(data.accountId) : '';
   const docId = normalizeAccountId(id);
   if (!docId || docId.includes('/') || !gender || !displayNick || accountId !== docId) return null;
+  const uid = typeof data.uid === 'string' && data.uid.trim() ? data.uid.trim() : accountId;
   return {
     accountId,
+    uid,
     displayNick: displayNick.slice(0, 79),
     gender,
     mood: asMood(data.mood),
@@ -162,6 +166,7 @@ export async function publishPresence(input: PresenceInput): Promise<void> {
       doc(database, PRESENCE_COLLECTION, accountId),
       {
         accountId,
+        uid: input.accountId.trim(),
         emailHash,
         displayNick,
         gender: input.gender,

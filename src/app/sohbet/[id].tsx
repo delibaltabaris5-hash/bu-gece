@@ -8,23 +8,18 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ChatComposer } from '@/components/ChatComposer';
 import { MessageBubble } from '@/components/MessageBubble';
 import { SilhouetteBubble } from '@/components/ProfileBubble';
 import { PrimaryButton } from '@/components/ui';
 import { getMember, memberFacingName } from '@/data/members';
 import { getRoom } from '@/data/rooms';
-import {
-  decodeRouteId,
-  dmThreadId,
-  sendLiveDm,
-  subscribeLiveThread,
-  type LiveDmMessage,
-} from '@/lib/liveDm';
+import { chatIdFor, newMessageId, subscribeChat, writeChatMessage, type ChatMessageDoc } from '@/lib/chats';
+import { decodeRouteId } from '@/lib/liveDm';
 import { cachedLivePerson, fetchLivePerson, normalizeAccountId, presenceFacingName, type LivePerson } from '@/lib/presence';
 import { useAppStore } from '@/store/useAppStore';
 import { fontFamily, night, radius, space } from '@/theme';
@@ -46,10 +41,10 @@ export default function SohbetThreadScreen() {
   const thread = useAppStore((state) => (memberId ? state.directMessages[memberId] : undefined));
   const postDirectMessage = useAppStore((state) => state.postDirectMessage);
   const spendMessageCredit = useAppStore((state) => state.spendMessageCredit);
-  const [draft, setDraft] = useState('');
   const [live, setLive] = useState<LivePerson | null>(null);
   const [resolvedFor, setResolvedFor] = useState<string | undefined>(seed ? memberId : undefined);
-  const [liveMessages, setLiveMessages] = useState<LiveDmMessage[]>([]);
+  const [liveMessages, setLiveMessages] = useState<ChatMessageDoc[]>([]);
+  const [failed, setFailed] = useState<ChatMessageDoc[]>([]);
   const [sendError, setSendError] = useState('');
 
   useEffect(() => {
@@ -80,29 +75,38 @@ export default function SohbetThreadScreen() {
   const room = seed ? getRoom(seed.roomId) : undefined;
   const matchedLive =
     live && memberId && normalizeAccountId(live.accountId) === normalizeAccountId(memberId) ? live : null;
-  const liveThreadId = matchedLive && accountId ? dmThreadId(accountId, matchedLive.accountId) : null;
+  const peerUid = matchedLive?.uid || matchedLive?.accountId || '';
+  const liveThreadId = matchedLive && accountId ? chatIdFor(accountId, peerUid) : null;
 
   useEffect(() => {
     if (!liveThreadId) {
       setLiveMessages([]);
       return;
     }
-    return subscribeLiveThread(liveThreadId, setLiveMessages);
+    return subscribeChat(liveThreadId, setLiveMessages, () => setSendError('Sohbet şu an okunamadı.'));
   }, [liveThreadId]);
 
   const data = useMemo(() => {
     if (!matchedLive || !accountId) return [...(thread ?? [])].reverse();
-    const selfId = normalizeAccountId(accountId);
-    return liveMessages
-      .map((message) => ({
-        id: message.id,
-        memberId: matchedLive.accountId,
-        from: message.fromAccountId === selfId ? ('self' as const) : ('member' as const),
-        text: message.text,
-        createdAt: message.createdAtMs || Date.now(),
-      }))
-      .reverse();
-  }, [accountId, liveMessages, matchedLive, thread]);
+    const selfId = accountId.trim();
+    const remote = liveMessages.map((message) => ({
+      id: message.id,
+      memberId: matchedLive.accountId,
+      from: message.senderType === 'bot' ? ('bot' as const) : message.senderId === selfId ? ('self' as const) : ('member' as const),
+      text: message.text,
+      createdAt: message.createdAt || Date.now(),
+      status: message.status,
+    }));
+    const pending = failed.filter((message) => !liveMessages.some((item) => item.id === message.id));
+    return [...remote, ...pending.map((message) => ({
+      id: message.id,
+      memberId: matchedLive.accountId,
+      from: 'self' as const,
+      text: message.text,
+      createdAt: message.createdAt,
+      status: 'failed' as const,
+    }))].reverse();
+  }, [accountId, failed, liveMessages, matchedLive, thread]);
   const face = seed
     ? {
         id: seed.id,
@@ -136,51 +140,83 @@ export default function SohbetThreadScreen() {
   const selfGender: Gender = gender ?? 'kadin';
   const selfName = isPro ? stableNick || 'Sen' : tempNick || 'Sen';
 
-  const renderItem = ({ item }: { item: DirectMessage }) => {
+  const renderItem = ({ item }: { item: DirectMessage & { status?: 'sending' | 'sent' | 'failed' } }) => {
     const mine = item.from === 'self';
-    const autoBot = Boolean(seed) && !mine;
+    const autoBot = item.from === 'bot' || (Boolean(seed) && !mine);
     return (
       <MessageBubble
         mine={mine}
         bot={autoBot}
         glyph={room?.mark ?? '✶'}
         gender={mine ? selfGender : face.gender}
-        name={mine ? selfName : autoBot ? `${face.label} · bot` : face.label}
+        name={mine ? selfName : autoBot ? face.label : face.label}
         text={item.text}
         createdAt={item.createdAt}
+        status={item.status}
+        onRetry={
+          item.status === 'failed' && liveThreadId && accountId && peerUid
+            ? () => {
+                void writeChatMessage({
+                  chatId: liveThreadId,
+                  messageId: newMessageId(),
+                  senderId: accountId,
+                  senderType: 'user',
+                  text: item.text,
+                  members: [accountId, peerUid],
+                }).then((ok) => {
+                  if (ok) setFailed((current) => current.filter((failedItem) => failedItem.id !== item.id));
+                });
+              }
+            : undefined
+        }
       />
     );
   };
 
-  const send = () => {
+  const send = async (text: string) => {
     if (!signedIn) {
       router.push('/giris');
-      return;
+      return false;
     }
-    if (quotaBlocked) return;
-    const text = draft.trim();
-    if (!text) return;
-    if (matchedLive && accountId && liveThreadId) {
-      setDraft('');
+    if (quotaBlocked) return false;
+    if (matchedLive && accountId && liveThreadId && peerUid) {
       setSendError('');
-      void sendLiveDm({ selfId: accountId, peerId: matchedLive.accountId, text }).then((messageId) => {
-        if (!messageId) {
-          setDraft(text);
-          setSendError('Mesaj iletilemedi.');
-          return;
-        }
-        spendMessageCredit();
+      const messageId = newMessageId();
+      const ok = await writeChatMessage({
+        chatId: liveThreadId,
+        messageId,
+        senderId: accountId,
+        senderType: 'user',
+        text,
+        members: [accountId, peerUid],
       });
-      return;
+      if (!ok) {
+        setFailed((current) => [
+          ...current,
+          {
+            id: messageId,
+            chatId: liveThreadId,
+            senderId: accountId,
+            senderType: 'user',
+            text,
+            createdAt: Date.now(),
+            type: 'text',
+            status: 'failed',
+          },
+        ]);
+        setSendError('Mesaj iletilemedi.');
+        return false;
+      }
+      spendMessageCredit();
+      return true;
     }
-    const sent = postDirectMessage(face.id, text);
-    if (sent) setDraft('');
+    return postDirectMessage(face.id, text);
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'android' ? undefined : 'padding'}
     >
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Geri" onPress={() => router.back()}>
@@ -216,51 +252,34 @@ export default function SohbetThreadScreen() {
         />
       )}
 
-      <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        {!signedIn ? (
+      {!signedIn ? (
+        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={styles.paywall}>
             <Text style={styles.payTitle}>Üye girişi</Text>
             <Text style={styles.payBody}>Misafir gezinebilir. Mesaj hakkı hesaba bağlıdır.</Text>
             <PrimaryButton label="Giriş yap" onPress={() => router.push('/giris')} />
           </View>
-        ) : quotaBlocked ? (
+        </View>
+      ) : quotaBlocked ? (
+        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={styles.paywall}>
             <Text style={styles.payTitle}>Ücretsiz mesaj hakkın doldu</Text>
             <Text style={styles.payBody}>Pro sınırsız yazar ve sabit adı açar.</Text>
             <PrimaryButton label="Pro’yu aç" onPress={() => router.push('/pro')} />
           </View>
-        ) : (
-          <>
-            <Text style={styles.hint}>
-              {sendError
-                ? sendError
-                : isPro
-                  ? 'Pro: sabit ad açık. Sınırsız mesaj.'
-                  : `Ücretsiz: ${remaining} mesaj kaldı. Oda ve sohbet aynı hakkı kullanır.`}
-            </Text>
-            <View style={styles.composerRow}>
-              <TextInput
-                value={draft}
-                onChangeText={setDraft}
-                placeholder="Bir cümle bırak"
-                placeholderTextColor={night.muted}
-                style={styles.input}
-                maxLength={400}
-                multiline
-              />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Gönder"
-                disabled={!draft.trim()}
-                onPress={send}
-                style={[styles.send, !draft.trim() && styles.sendOff]}
-              >
-                <Text style={styles.sendLabel}>Gönder</Text>
-              </Pressable>
-            </View>
-          </>
-        )}
-      </View>
+        </View>
+      ) : (
+        <ChatComposer
+          hint={
+            sendError
+              ? sendError
+              : isPro
+                ? 'Pro: sabit ad açık. Sınırsız mesaj.'
+                : `Ücretsiz: ${remaining} mesaj kaldı. Oda ve sohbet aynı hakkı kullanır.`
+          }
+          onSend={send}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }
