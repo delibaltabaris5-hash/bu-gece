@@ -75,8 +75,8 @@ export default function SohbetThreadScreen() {
   const room = seed ? getRoom(seed.roomId) : undefined;
   const matchedLive =
     live && memberId && normalizeAccountId(live.accountId) === normalizeAccountId(memberId) ? live : null;
-  const peerUid = matchedLive?.uid || matchedLive?.accountId || '';
-  const liveThreadId = matchedLive && accountId ? chatIdFor(accountId, peerUid) : null;
+  const peerUid = matchedLive?.uid || (!seed ? memberId ?? '' : '');
+  const liveThreadId = accountId && peerUid && !seed ? chatIdFor(accountId, peerUid) : null;
 
   useEffect(() => {
     if (!liveThreadId) {
@@ -87,11 +87,11 @@ export default function SohbetThreadScreen() {
   }, [liveThreadId]);
 
   const data = useMemo(() => {
-    if (!matchedLive || !accountId) return [...(thread ?? [])].reverse();
+    if (!liveThreadId || !accountId || !peerUid) return [...(thread ?? [])].reverse();
     const selfId = accountId.trim();
     const remote = liveMessages.map((message) => ({
       id: message.id,
-      memberId: matchedLive.accountId,
+      memberId: peerUid,
       from: message.senderType === 'bot' ? ('bot' as const) : message.senderId === selfId ? ('self' as const) : ('member' as const),
       text: message.text,
       createdAt: message.createdAt || Date.now(),
@@ -100,13 +100,13 @@ export default function SohbetThreadScreen() {
     const pending = failed.filter((message) => !liveMessages.some((item) => item.id === message.id));
     return [...remote, ...pending.map((message) => ({
       id: message.id,
-      memberId: matchedLive.accountId,
+      memberId: peerUid,
       from: 'self' as const,
       text: message.text,
       createdAt: message.createdAt,
       status: 'failed' as const,
     }))].reverse();
-  }, [accountId, failed, liveMessages, matchedLive, thread]);
+  }, [accountId, failed, liveMessages, liveThreadId, peerUid, thread]);
   const face = seed
     ? {
         id: seed.id,
@@ -123,7 +123,14 @@ export default function SohbetThreadScreen() {
           label: presenceFacingName(matchedLive.displayNick, isPro),
           subtitle: isPro ? 'Çevrimiçi' : 'Ücretsiz · simge ve geçici numara',
         }
-      : null;
+      : accountId && memberId && !seed && resolvedFor === memberId
+        ? {
+            id: memberId,
+            gender: 'kadin' as Gender,
+            label: 'Eşleşme',
+            subtitle: 'Aynı ruh hali',
+          }
+        : null;
 
   if (!face) {
     return (
@@ -179,7 +186,7 @@ export default function SohbetThreadScreen() {
       return false;
     }
     if (quotaBlocked) return false;
-    if (matchedLive && accountId && liveThreadId && peerUid) {
+    if (accountId && liveThreadId && peerUid && !seed) {
       setSendError('');
       const messageId = newMessageId();
       const ok = await writeChatMessage({

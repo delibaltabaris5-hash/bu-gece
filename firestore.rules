@@ -12,11 +12,35 @@ service cloud.firestore {
         && request.resource.data.createdAt is number;
       allow update: if request.auth != null
         && request.auth.uid == uid
-        && request.resource.data.uid == uid;
+        && request.resource.data.uid == uid
+        && request.resource.data.get('matchedWith', null) == resource.data.get('matchedWith', null)
+        && request.resource.data.get('matchId', null) == resource.data.get('matchId', null)
+        && (
+          request.resource.data.get('matchStatus', null) == resource.data.get('matchStatus', null)
+          || (
+            request.resource.data.matchStatus in ['idle', 'waiting']
+            && resource.data.get('matchStatus', 'idle') != 'matched'
+          )
+        );
       allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
     // Presence stays open for the live room list. Account identity is users/{uid}.
+    match /matchQueue/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.status == 'waiting'
+        && request.resource.data.mood is string;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /matches/{matchId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.users;
+      allow write: if false;
+    }
+
     match /presence/{userId} {
       allow read, write: if true;
     }

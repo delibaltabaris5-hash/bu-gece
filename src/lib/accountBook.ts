@@ -12,6 +12,7 @@ import {
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 
 import { getFirebaseApp, getPresenceDb } from '@/lib/firebaseApp';
+import { isMatchMood, type MatchMood } from '@/lib/matchMoods';
 import { FREE_MESSAGE_QUOTA } from '@/lib/quota';
 import { deleteSecureValue, writeSecureValue } from '@/lib/secureKv';
 
@@ -28,6 +29,7 @@ export type MemberAccount = {
   provider?: 'password' | 'google';
   freeMessagesRemaining: number;
   isPro: boolean;
+  mood?: MatchMood | null;
 };
 
 export type AccountBook = {
@@ -81,6 +83,7 @@ async function writeProfile(account: MemberAccount, created: boolean): Promise<v
       freeMessagesRemaining: account.freeMessagesRemaining,
       isPro: account.isPro,
       provider: account.provider ?? 'password',
+      ...(account.mood ? { mood: account.mood, moodUpdatedAt: Date.now(), matchStatus: 'idle' } : {}),
     },
     { merge: true },
   );
@@ -96,6 +99,7 @@ function accountFromProfile(uid: string, data: Record<string, unknown>, emailFal
     freeMessagesRemaining:
       typeof data.freeMessagesRemaining === 'number' ? data.freeMessagesRemaining : FREE_MESSAGE_QUOTA,
     isPro: data.isPro === true,
+    mood: isMatchMood(typeof data.mood === 'string' ? data.mood : null) ? (data.mood as MatchMood) : null,
   };
 }
 
@@ -199,9 +203,11 @@ export async function registerAccount(
   emailInput: string,
   password: string,
   displayNameInput = '',
+  moodInput = '',
 ): Promise<AuthResult> {
   const checked = validateCredentials(emailInput, password);
   if ('ok' in checked) return checked;
+  if (!isMatchMood(moodInput)) return { ok: false, message: 'Bir ruh hali seç.' };
   try {
     const cred = await createUserWithEmailAndPassword(firebaseAuth(), checked.email, password);
     const account: MemberAccount = {
@@ -212,6 +218,7 @@ export async function registerAccount(
       provider: 'password',
       freeMessagesRemaining: FREE_MESSAGE_QUOTA,
       isPro: false,
+      mood: moodInput,
     };
     await writeProfile(account, true);
     await writeSessionAccountId(cred.user.uid);

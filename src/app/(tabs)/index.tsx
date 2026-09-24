@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { Crescent } from '@/components/Crescent';
+import { MatchButton } from '@/components/MatchButton';
 import { InterestBubble } from '@/components/InterestBubble';
 import { Screen } from '@/components/ui';
 import { BUBBLE_ART } from '@/data/bubbleArt';
@@ -69,6 +70,7 @@ export default function HomeScreen() {
           </Text>
           <Crescent size={Math.max(22, titleSize * 0.46)} cutoutColor={night.bg} />
         </View>
+        <MatchButton uid={accountId} />
 
         <View
           style={styles.field}

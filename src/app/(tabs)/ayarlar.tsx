@@ -8,6 +8,8 @@ import { ContactPanel } from '@/components/ContactPanel';
 import { Pill, PrimaryButton, Screen, SecondaryButton } from '@/components/ui';
 import { getRoom } from '@/data/rooms';
 import { writeSessionAccountId } from '@/lib/accountBook';
+import { MATCH_MOODS, matchMoodLabel, type MatchMood } from '@/lib/matchMoods';
+import { leaveMatchQueue, saveMatchMood } from '@/lib/matching';
 import { MOODS, genderLabel, labelOf } from '@/labels';
 import { useAppStore } from '@/store/useAppStore';
 import { colors, fontFamily, night, radius, space } from '@/theme';
@@ -85,6 +87,22 @@ export default function SettingsScreen() {
           <Text style={styles.line}>Odada görünen geçici ad: {tempNick || '—'}</Text>
           <Text style={styles.line}>Pro ile sabit ad: {stableNick || '—'}</Text>
           <Text style={styles.line}>Tempo: {mood ? labelOf(MOODS, mood) : 'Seçilmedi'}</Text>
+          <Text style={styles.line}>Eşleşme ruh hali</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {MATCH_MOODS.map((option) => (
+              <Pressable
+                key={option.value}
+                accessibilityRole="button"
+                onPress={() => {
+                  if (!accountId) return;
+                  void leaveMatchQueue(accountId).then(() => saveMatchMood(accountId, option.value as MatchMood));
+                }}
+              >
+                <Text style={styles.meta}>{option.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.meta}>{accountId ? 'Seçince havuzdaki eski ruh hali silinir.' : matchMoodLabel(null)}</Text>
         </View>
 
         <View style={styles.card}>
