@@ -5,18 +5,19 @@ import { Platform } from 'react-native';
 
 WebBrowser.maybeCompleteAuthSession();
 
-function readEnv(name: string): string {
-  const value = (process.env as Record<string, string | undefined>)[name];
+function trimEnv(value: string | undefined): string {
   return value?.trim() ?? '';
 }
 
 export function googleClientIds(): { web: string; ios: string; android: string } {
-  // Expo inlines only EXPO_PUBLIC_ variables. A bare GOOGLE_CLIENT_ID never reaches the app.
-  const web = readEnv('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID') || readEnv('EXPO_PUBLIC_GOOGLE_CLIENT_ID');
+  // Metro inlines only a direct `process.env.EXPO_PUBLIC_*` read. A dynamic lookup stays empty in the web bundle.
+  const web =
+    trimEnv(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) ||
+    trimEnv(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID);
   return {
     web,
-    ios: readEnv('EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID'),
-    android: readEnv('EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID'),
+    ios: trimEnv(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID),
+    android: trimEnv(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID),
   };
 }
 
@@ -67,7 +68,8 @@ export function googleRedirectUri(): string {
   });
 
   if ((ALLOWED_WEB_REDIRECTS as readonly string[]).includes(computed)) return computed;
-  if (Platform.OS === 'web') return allowlistedWebOrigin(computed);
+  // Phone browsers cannot return to localhost. The Expo proxy URI is the one Google already allows.
+  if (Platform.OS === 'web') return `https://auth.expo.io/${expoProxyProject()}`;
   return `https://auth.expo.io/${expoProxyProject()}`;
 }
 

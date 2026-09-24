@@ -104,6 +104,29 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail }:
     void consume(response);
   }, [response]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const search = new URLSearchParams(window.location.search);
+    const idToken = hash.get('id_token') || search.get('id_token') || '';
+    const access = hash.get('access_token') || search.get('access_token') || '';
+    if (!idToken && !access) return;
+    const state = hash.get('state') || search.get('state') || '';
+    const expected = window.sessionStorage.getItem('bugece.google.state') ?? '';
+    window.history.replaceState({}, '', window.location.pathname);
+    if (expected && state && state !== expected) {
+      fail();
+      return;
+    }
+    void fetchGoogleProfile(access, idToken).then((profile) => {
+      if (!profile) {
+        fail();
+        return;
+      }
+      onProfileRef.current(profile);
+    });
+  }, []);
+
   const press = async () => {
     if (disabled) return;
     if (!request) {
@@ -113,7 +136,15 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail }:
     }
     try {
       if (Platform.OS === 'web') {
-        await consume(await promptAsync());
+        const authUrl = await request.makeAuthUrlAsync(Google.discovery);
+        const returnUrl = `${window.location.origin}${window.location.pathname}`;
+        window.sessionStorage.setItem('bugece.google.state', request.state ?? '');
+        window.location.assign(
+          `https://auth.expo.io/${expoProxyProject()}/start?${new URLSearchParams({
+            authUrl,
+            returnUrl,
+          }).toString()}`,
+        );
         return;
       }
 
