@@ -14,6 +14,7 @@ export default function SettingsScreen() {
   const room = getRoom(useAppStore((state) => state.roomId));
   const mood = useAppStore((state) => state.mood);
   const isPro = useAppStore((state) => state.isPro);
+  const freeMessagesRemaining = useAppStore((state) => state.freeMessagesRemaining);
   const stableNick = useAppStore((state) => state.stableNick);
   const tempNick = useAppStore((state) => state.tempNick);
   const resetIdentity = useAppStore((state) => state.resetIdentity);
@@ -65,7 +66,8 @@ export default function SettingsScreen() {
             <Pill label={isPro ? 'Pro' : 'Ücretsiz'} tone={isPro ? 'gold' : 'muted'} />
           </View>
           <Text style={styles.body}>
-            Ücretsiz planda odadaki kişiler simge ve geçici numarayla görünür. Odaya yazabilirsin, doğrudan mesaj yazamazsın.
+            Ücretsiz planda odadaki kişiler simge ve geçici numarayla görünür. Odaya 1–2 mesaj yazılır
+            {isPro ? ' (Pro ile sınırsız).' : ` (${Math.max(0, freeMessagesRemaining)} kaldı).`} Doğrudan mesaj kapalıdır.
           </Text>
           <Text style={styles.body}>
             Pro, sabit takma adı, kısa tanıtımı ve doğrudan mesajı açar. Bu sürümde kilit yerel bir denemedir.

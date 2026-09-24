@@ -10,7 +10,7 @@ import { colors, radius, space } from '@/theme';
 const ROWS = [
   {
     title: 'Ücretsiz',
-    body: 'Cinsiyet simgesi, geçici numara ve oda sohbeti. Doğrudan mesaj kapalı.',
+    body: 'Cinsiyet simgesi, geçici numara ve 1–2 oda mesajı. Doğrudan mesaj kapalı.',
   },
   {
     title: 'Pro',

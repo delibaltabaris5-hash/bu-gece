@@ -34,6 +34,8 @@ Expo hesabı gerekmez. Telefon ve bilgisayar aynı ağda olmalıdır.
 3. Terminaldeki QR kodu Expo Go ile okut. Bağlantı koparsa `npx expo start --tunnel` dene.
 4. Android emülatör açıksa terminalde `a`.
 
+Açılınca **Bu Gece** sekmesi kilitli ana sayfadır: gece zemini, başlık ve hilal, **Yakındakiler | Genel**, ortada Felsefe ile dokuz ışıltılı oda baloncuğu, altta **Ücretsiz: 1–2 mesaj kaldı**. Kaydırmalı profil kartı yoktur. Atmosfer ses kaydırıcısı bir odaya girince görünür.
+
 Web için terminalde `w`.
 
 ### Kurulabilir APK
@@ -69,9 +71,9 @@ cd android && ./gradlew assembleDebug
 ## Akış
 
 1. Cinsiyet simgesi ve ev odası seçilir. Tempo isteğe bağlıdır.
-2. **Bu Gece** ekranı ruh hali, bütçe ve mesafeye göre tek bir örnek plan gösterir.
-3. **Odalar** on kulübü listeler. Oda açılınca moderatör bot o günün konusunu (alıntı + soru) bırakır.
-4. Ücretsiz kullanıcı odaya yazabilir. Bir kişiye dokununca yalnızca simge ve `Felsefe_4821` gibi geçici numara görünür. Doğrudan mesaj duvara düşer.
+2. **Bu Gece** ekranı on odayı ışıltılı baloncuklar olarak gösterir. **Yakındakiler** Tarih için 1.2 km rozetini açar; **Genel** aynı takımyıldızı rozetsiz bırakır.
+3. **Odalar** on kulübü listeler. Oda açılınca moderatör bot o günün konusunu (alıntı + soru) bırakır. Altta Atmosfer kaydırıcısı kısık bir yumuşak döngü çalar. Dosya orijinal bir yer tutucudur; Hans Zimmer kaydı yoktur.
+4. Ücretsiz kullanıcı odaya 1–2 mesaj yazabilir. Bir kişiye dokununca yalnızca simge ve `Felsefe_4821` gibi geçici numara görünür. Doğrudan mesaj duvara düşer.
 5. **Pro’yu aç** kilidi bu cihazda açar. Profiller ve doğrudan mesaj kullanılabilir. **Ayarlar** içinden Pro kapatılabilir.
 
 Sohbet, planlar ve satın alma bu sürümde cihazın içindedir. Sunucu, push ve gerçek ödeme yoktur.
@@ -81,7 +83,7 @@ Sohbet, planlar ve satın alma bu sürümde cihazın içindedir. Sunucu, push ve
 | | Ücretsiz | Pro |
 | --- | --- | --- |
 | Odada görünüm | Cinsiyet simgesi + geçici numara | Sabit takma ad ve kısa tanıtım |
-| Oda sohbeti | Okuma ve yazma | Okuma ve yazma |
+| Oda sohbeti | Okuma ve 1–2 mesaj | Okuma ve sınırsız yazma |
 | Doğrudan mesaj | Kapalı | Açık |
 | Ödeme | — | Yerel deneme. Play Billing sonra `src/billing/mockProBilling.ts` yerine bağlanır |
 

@@ -4,15 +4,15 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { Platform, StatusBar as NativeStatusBar, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useAppStore } from '@/store/useAppStore';
-import { colors } from '@/theme';
+import { colors, night } from '@/theme';
 
 export default function RootLayout() {
   useEffect(() => {
-    SystemUI.setBackgroundColorAsync(colors.bg).catch(() => undefined);
+    SystemUI.setBackgroundColorAsync(night.bg).catch(() => undefined);
     let settled = false;
     const finish = () => {
       if (settled) return;
@@ -31,8 +31,11 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
-      <View style={{ flex: 1, backgroundColor: colors.bgDeep, alignItems: 'center' }}>
-        <View style={{ flex: 1, width: '100%', maxWidth: 480, backgroundColor: colors.bg }}>
+      {Platform.OS === 'android' ? (
+        <NativeStatusBar barStyle="light-content" backgroundColor={night.bg} translucent />
+      ) : null}
+      <View style={{ flex: 1, backgroundColor: night.bg, alignItems: 'center' }}>
+        <View style={{ flex: 1, width: '100%', maxWidth: 480, backgroundColor: night.bg }}>
           <Stack
             screenOptions={{
               headerShown: false,

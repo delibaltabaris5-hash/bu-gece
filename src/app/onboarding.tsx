@@ -33,7 +33,7 @@ export default function OnboardingScreen() {
             <Text style={styles.kicker}>İlgi kulüpleri</Text>
             <Text style={styles.title}>Bu Gece</Text>
             <Text style={styles.body}>
-              Felsefeden mitolojiye on oda. Bu gecenin konusunu birlikte aç, tek bir plan önerisi al.
+              Felsefeden mitolojiye on oda. Ana ekranda odalar ışıltılı baloncuklar olarak durur.
               Odalar konu içindir.
             </Text>
             <PrimaryButton label="Başla" onPress={() => setStep('gender')} />
@@ -108,7 +108,7 @@ export default function OnboardingScreen() {
             <Text style={styles.kicker}>3 / 3</Text>
             <Text style={styles.title}>Bu gecenin temposu</Text>
             <Text style={styles.body}>
-              İstersen boş bırak. Planı ana ekranda bütçe ve mesafeyle birlikte değiştirebilirsin.
+              İstersen boş bırak. Tempo bu cihazda bir not olarak kalır.
             </Text>
             <View style={styles.wrap}>
               {MOODS.map((option) => {

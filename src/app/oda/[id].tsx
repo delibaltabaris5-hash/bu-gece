@@ -12,10 +12,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AtmosphereControl } from '@/components/AtmosphereControl';
+import { Crescent } from '@/components/Crescent';
 import { MessageBubble } from '@/components/MessageBubble';
 import { getMember } from '@/data/members';
 import { getRoom } from '@/data/rooms';
 import { topicForDay } from '@/data/topics';
+import { useAtmosphere } from '@/hooks/useAtmosphere';
 import { memberTempNick, tempNickInRoom } from '@/lib/identity';
 import { useAppStore } from '@/store/useAppStore';
 import { colors, radius, space } from '@/theme';
@@ -30,10 +33,12 @@ export default function RoomScreen() {
   const ensureDailyTopic = useAppStore((state) => state.ensureDailyTopic);
   const postRoomMessage = useAppStore((state) => state.postRoomMessage);
   const isPro = useAppStore((state) => state.isPro);
+  const freeMessagesRemaining = useAppStore((state) => state.freeMessagesRemaining);
   const gender = useAppStore((state) => state.gender);
   const tempNick = useAppStore((state) => state.tempNick);
   const stableNick = useAppStore((state) => state.stableNick);
   const [draft, setDraft] = useState('');
+  const atmosphere = useAtmosphere();
 
   useEffect(() => {
     if (room) ensureDailyTopic(room.id);
@@ -95,9 +100,12 @@ export default function RoomScreen() {
     );
   };
 
+  const quotaBlocked = !isPro && freeMessagesRemaining <= 0;
+
   const send = () => {
-    postRoomMessage(room.id, draft);
-    setDraft('');
+    if (quotaBlocked) return;
+    const sent = postRoomMessage(room.id, draft);
+    if (sent) setDraft('');
   };
 
   return (
@@ -110,8 +118,13 @@ export default function RoomScreen() {
           <Text style={styles.back}>Geri</Text>
         </Pressable>
         <View style={styles.headerCopy}>
-          <Text style={styles.title}>{room.name}</Text>
-          <Text style={styles.subtitle}>{room.name} Bot · {isPro ? 'Pro' : 'Ücretsiz'}</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>{room.name}</Text>
+            <Crescent size={18} cutoutColor={colors.bg} />
+          </View>
+          <Text style={styles.subtitle}>
+            {room.name} Bot · {isPro ? 'Pro' : `Ücretsiz · ${Math.max(0, freeMessagesRemaining)} mesaj`}
+          </Text>
         </View>
       </View>
 
@@ -130,11 +143,13 @@ export default function RoomScreen() {
         keyboardShouldPersistTaps="handled"
       />
 
-      <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+      <View style={styles.composer}>
         <Text style={styles.hint}>
           {isPro
             ? 'Pro: sabit adlar açık. Odaya herkes yazabilir.'
-            : 'Ücretsiz: simge ve geçici numara. Odaya yazılır, doğrudan mesaj kapalıdır.'}
+            : quotaBlocked
+              ? 'Ücretsiz mesaj hakkın doldu. Pro sınırsız yazar.'
+              : `Ücretsiz: ${freeMessagesRemaining} mesaj kaldı. Simge ve geçici numara.`}
         </Text>
         <View style={styles.composerRow}>
           <TextInput
@@ -149,13 +164,16 @@ export default function RoomScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Gönder"
-            disabled={!draft.trim()}
+            disabled={!draft.trim() || quotaBlocked}
             onPress={send}
-            style={[styles.send, !draft.trim() && styles.sendOff]}
+            style={[styles.send, (!draft.trim() || quotaBlocked) && styles.sendOff]}
           >
             <Text style={styles.sendLabel}>Gönder</Text>
           </Pressable>
         </View>
+      </View>
+      <View style={{ paddingBottom: Math.max(insets.bottom, 8), backgroundColor: colors.bg }}>
+        <AtmosphereControl volume={atmosphere.volume} onVolume={atmosphere.setVolume} />
       </View>
     </KeyboardAvoidingView>
   );
@@ -191,6 +209,11 @@ const styles = StyleSheet.create({
   },
   headerCopy: {
     flex: 1,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   title: {
     color: colors.text,
