@@ -216,6 +216,9 @@ export default function LoginScreen() {
             </Pressable>
             <Brand titleSize={Math.min(titleSize, 42)} />
             <Text style={styles.formLead}>
+              {panel === 'kayit' ? 'Kayıt formu' : 'Giriş formu'}
+            </Text>
+            <Text style={styles.formLead}>
               {panel === 'kayit'
                 ? `Yeni hesap ${FREE_MESSAGE_QUOTA} mesajla açılır.`
                 : 'Kayıtlı e-posta kalan mesajı açar.'}
@@ -573,8 +576,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(130, 196, 255, 0.45)',
-    backgroundColor: 'rgba(8, 18, 34, 0.72)',
-    color: night.text,
+    backgroundColor: '#F4F7FB',
+    color: '#0C1016',
     fontSize: 16,
     paddingHorizontal: 16,
     fontFamily: fontFamily.sans,

@@ -284,7 +284,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'bu-gece-v1',
       storage: guardedStorage,
-      version: 5,
+      version: 6,
       migrate: (persisted, version) => {
         const state = { ...(persisted as PersistedSlice) };
         // Missing count only: a number already stored (including a used 0–2 balance)
@@ -301,7 +301,7 @@ export const useAppStore = create<AppState>()(
           if (typeof state.accountName !== 'string') state.accountName = '';
           if (typeof state.authStepDone !== 'boolean') state.authStepDone = false;
         }
-        if (version < 5) {
+        if (version < 6) {
           state.authStepDone = false;
           state.accountId = null;
           state.accountEmail = null;
