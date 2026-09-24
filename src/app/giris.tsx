@@ -46,7 +46,7 @@ export default function LoginScreen() {
   const remaining = useAppStore((state) => state.freeMessagesRemaining);
   const accountName = useAppStore((state) => state.accountName);
   const signOut = useAppStore((state) => state.signOut);
-  const [panel, setPanel] = useState<Panel>('home');
+  const [panel, setPanel] = useState<Panel>('kayit');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -134,7 +134,7 @@ export default function LoginScreen() {
       <View pointerEvents="none" style={styles.galaxy} />
       <View pointerEvents="none" style={styles.galaxySoft} />
 
-      {accountId ? (
+      {accountId && panel === 'home' ? (
         <View style={styles.flex}>
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <Brand titleSize={Math.min(titleSize, 42)} />
