@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
+import { RegisteredUsers } from '@/components/RegisteredUsers';
 import { ContactPanel } from '@/components/ContactPanel';
 import { Pill, PrimaryButton, Screen, SecondaryButton } from '@/components/ui';
 import { getRoom } from '@/data/rooms';
@@ -131,6 +132,7 @@ export default function SettingsScreen() {
             </View>
             <Text style={styles.chevron}>›</Text>
           </Pressable>
+          {accountId ? <RegisteredUsers /> : null}
           {accountId ? (
             <>
               <View style={styles.divider} />

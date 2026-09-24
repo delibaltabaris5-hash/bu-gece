@@ -18,7 +18,7 @@ import {
 } from '@/lib/googleAuth';
 import { fontFamily } from '@/theme';
 
-type Profile = { email: string; name: string };
+type Profile = { email: string; name: string; idToken: string };
 
 type Props = {
   disabled?: boolean;
@@ -57,7 +57,8 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail }:
     // whose redirect_uri is auth.expo.io, which fails when the app only sees exp://.
     responseType: AuthSession.ResponseType.IdToken,
     scopes: ['openid', 'profile', 'email'],
-    selectAccount: true,
+    // select_account alone skips the password when Chrome is already signed in.
+    extraParams: { prompt: 'login select_account' },
     shouldAutoExchangeCode: false,
   });
   const onProfileRef = useRef(onProfile);
@@ -93,7 +94,7 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail }:
       fail();
       return;
     }
-    onProfileRef.current(profile);
+    onProfileRef.current({ ...profile, idToken });
   };
 
   useEffect(() => {
@@ -123,7 +124,7 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail }:
         fail();
         return;
       }
-      onProfileRef.current(profile);
+      onProfileRef.current({ ...profile, idToken });
     });
   }, []);
 

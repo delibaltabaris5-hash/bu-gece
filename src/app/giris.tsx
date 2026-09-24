@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { GoogleSignInButton } from '@/components/GoogleSignInButton';
+import { RegisteredUsers } from '@/components/RegisteredUsers';
 import { Starfield } from '@/components/Starfield';
 import { PrimaryButton, Screen } from '@/components/ui';
 import { nudgeAtmospherePlayback } from '@/hooks/useAtmosphere';
@@ -94,12 +95,12 @@ export default function LoginScreen() {
     }
   };
 
-  const google = async (profile: { email: string; name: string }) => {
+  const google = async (profile: { email: string; name: string; idToken: string }) => {
     if (busy) return;
     setBusy(true);
     setError('');
     try {
-      await finish(await signInWithGoogle(profile.email, profile.name));
+      await finish(await signInWithGoogle(profile.email, profile.name, profile.idToken));
     } finally {
       setBusy(false);
     }
@@ -145,6 +146,7 @@ export default function LoginScreen() {
               <Text style={styles.body}>
                 Hak bu hesaba bağlıdır. Aynı e-posta ile yeniden giriş, kayıtlı sayıyı açar.
               </Text>
+              <RegisteredUsers />
               <PrimaryButton label="Çıkış yap" onPress={() => void logout()} />
               {authStepDone ? (
                 <Pressable accessibilityRole="button" onPress={() => leave()} style={styles.textBtn}>
@@ -278,7 +280,7 @@ export default function LoginScreen() {
                   <Text style={styles.memberLink}>{panel === 'kayit' ? 'Giriş yap.' : 'Kayıt ol.'}</Text>
                 </Text>
               </Pressable>
-              <Text style={styles.fine}>Şifre yalnızca bu cihazda durur.</Text>
+              <Text style={styles.fine}>Hesap Firebase’de kalır. Çıkış yalnızca bu oturumu kapatır.</Text>
             </View>
             <GoogleSignInButton
               disabled={busy}
