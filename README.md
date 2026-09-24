@@ -4,6 +4,18 @@
 
 Ücretsiz planda kişiler yalnızca cinsiyet simgesi ve geçici numarayla görünür. Pro, sabit takma adı, kısa tanıtımı ve doğrudan mesajı açar. Bu sürümde Pro kilidi yerel bir denemedir; Google Play Billing bağlı değildir.
 
+## Flutter
+
+Geliştirme bundan sonra `flutter/` içindeki Flutter uygulamasından yürür. Expo ağacı duruyor; ekranlar, 10 oda, 50 kişi, planlar ve yerel Pro denemesi oraya taşındı.
+
+```bash
+cd flutter
+flutter pub get
+flutter run
+```
+
+Android paket adı `com.bugece.app`. Arayüz Türkçedir.
+
 ## Çalıştırma
 
 ```bash
