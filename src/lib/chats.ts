@@ -1,17 +1,4 @@
-import {
-  collection,
-  doc,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  Timestamp,
-  type DocumentData,
-} from 'firebase/firestore';
-
-import { getPresenceDb } from '@/lib/firebaseApp';
+import { getSupabase } from '@/lib/supabaseClient';
 
 export const MESSAGE_MAX = 2000;
 
@@ -29,7 +16,6 @@ export type ChatMessageDoc = {
   status: MessageStatus;
 };
 
-/** Sorted pair. Both sides must normalize the same way. */
 function cleanId(value: string): string {
   return value.trim();
 }
@@ -45,32 +31,36 @@ export function chatIdFor(a: string, b: string): string | null {
   return id;
 }
 
-function createdAtMs(value: unknown): number {
-  if (value instanceof Timestamp) return value.toMillis();
-  if (value && typeof value === 'object' && 'toMillis' in value && typeof (value as { toMillis?: unknown }).toMillis === 'function') {
-    const ms = (value as { toMillis: () => number }).toMillis();
-    return Number.isFinite(ms) ? ms : 0;
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  return 0;
-}
-
-function parseMessage(chatId: string, id: string, data: DocumentData, pending: boolean): ChatMessageDoc | null {
-  const text = typeof data.text === 'string' ? data.text.trim() : '';
-  const senderId = typeof data.senderId === 'string' ? data.senderId : '';
-  const senderType: SenderType = data.senderType === 'bot' ? 'bot' : 'user';
+function parseRow(row: Record<string, unknown>): ChatMessageDoc | null {
+  const text = typeof row.body === 'string' ? row.body.trim() : '';
+  const senderId = typeof row.sender_id === 'string' ? row.sender_id : '';
+  const id = typeof row.id === 'string' ? row.id : '';
+  const chatId = typeof row.chat_id === 'string' ? row.chat_id : '';
   if (!id || !text || !senderId) return null;
-  const status: MessageStatus = data.status === 'failed' || data.status === 'sending' ? data.status : 'sent';
+  const created = typeof row.created_at === 'string' ? Date.parse(row.created_at) : 0;
   return {
     id,
     chatId,
     senderId,
-    senderType,
+    senderType: row.sender_type === 'bot' ? 'bot' : 'user',
     text: text.slice(0, MESSAGE_MAX),
-    createdAt: createdAtMs(data.createdAt) || (pending ? Date.now() : 0),
+    createdAt: Number.isFinite(created) ? created : Date.now(),
     type: 'text',
-    status: pending ? 'sending' : status,
+    status: row.status === 'failed' || row.status === 'sending' ? row.status : 'sent',
   };
+}
+
+async function loadMessages(chatId: string): Promise<ChatMessageDoc[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('chat_id', chatId)
+    .order('created_at', { ascending: true })
+    .limit(80);
+  if (error || !data) return [];
+  return data.map((row) => parseRow(row as Record<string, unknown>)).filter((item): item is ChatMessageDoc => item !== null);
 }
 
 export function subscribeChat(
@@ -78,44 +68,42 @@ export function subscribeChat(
   onMessages: (messages: ChatMessageDoc[]) => void,
   onError?: () => void,
 ): () => void {
-  const database = getPresenceDb();
-  if (!database || !chatId) {
+  const supabase = getSupabase();
+  if (!supabase || !chatId) {
     onError?.();
     return () => undefined;
   }
-  const recent = query(collection(database, 'chats', chatId, 'messages'), orderBy('createdAt', 'asc'), limit(80));
-  return onSnapshot(
-    recent,
-    (snap) => {
-      const messages: ChatMessageDoc[] = [];
-      for (const item of snap.docs) {
-        const message = parseMessage(chatId, item.id, item.data(), item.metadata.hasPendingWrites);
-        if (message) messages.push(message);
-      }
-      onMessages(messages);
-    },
-    () => onError?.(),
-  );
+  let closed = false;
+  const pull = () => {
+    void loadMessages(chatId).then((messages) => {
+      if (!closed) onMessages(messages);
+    }).catch(() => onError?.());
+  };
+  pull();
+  const channel = supabase
+    .channel(`messages-${chatId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, pull)
+    .subscribe();
+  return () => {
+    closed = true;
+    void supabase.removeChannel(channel);
+  };
 }
 
 export async function ensureChat(chatId: string, members: string[], last?: { text: string; senderId: string }): Promise<boolean> {
-  const database = getPresenceDb();
-  if (!database || !chatId || members.length < 2) return false;
-  try {
-    await setDoc(
-      doc(database, 'chats', chatId),
-      {
-        members: [...new Set(members.map((id) => cleanId(id)).filter(Boolean))].sort(),
-        ...(last
-          ? { lastMessage: last.text.slice(0, 200), lastAt: serverTimestamp(), lastSenderId: last.senderId }
-          : {}),
-      },
-      { merge: true },
-    );
-    return true;
-  } catch {
-    return false;
+  const supabase = getSupabase();
+  if (!supabase || !chatId || members.length < 2) return false;
+  const { error: chatError } = await supabase.from('chats').upsert({
+    id: chatId,
+    ...(last ? { last_message: last.text.slice(0, 200), last_at: new Date().toISOString(), last_sender_id: last.senderId } : {}),
+  });
+  if (chatError) return false;
+  const ids = [...new Set(members.map(cleanId).filter(Boolean))];
+  for (const userId of ids) {
+    const { error } = await supabase.from('chat_members').upsert({ chat_id: chatId, user_id: userId });
+    if (error) return false;
   }
+  return true;
 }
 
 export async function writeChatMessage(input: {
@@ -126,24 +114,21 @@ export async function writeChatMessage(input: {
   text: string;
   members: string[];
 }): Promise<boolean> {
-  const database = getPresenceDb();
+  const supabase = getSupabase();
   const text = input.text.trim().slice(0, MESSAGE_MAX);
-  if (!database || !input.chatId || !text) return false;
+  if (!supabase || !input.chatId || !text) return false;
   const ready = await ensureChat(input.chatId, input.members, { text, senderId: input.senderId });
   if (!ready) return false;
-  try {
-    await setDoc(doc(database, 'chats', input.chatId, 'messages', input.messageId), {
-      senderId: input.senderId,
-      senderType: input.senderType,
-      text,
-      createdAt: serverTimestamp(),
-      type: 'text',
-      status: 'sent',
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  const { error } = await supabase.from('messages').insert({
+    id: input.messageId,
+    chat_id: input.chatId,
+    sender_id: input.senderId,
+    sender_type: input.senderType,
+    body: text,
+    type: 'text',
+    status: 'sent',
+  });
+  return !error;
 }
 
 export function newMessageId(): string {

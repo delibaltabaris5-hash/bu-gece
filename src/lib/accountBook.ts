@@ -1,20 +1,9 @@
-import {
-  createUserWithEmailAndPassword,
-  getAuth,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  signInWithCredential,
-  signInWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  type Auth,
-  type User,
-} from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import type { User } from '@supabase/supabase-js';
 
-import { getFirebaseApp, getPresenceDb } from '@/lib/firebaseApp';
 import { isMatchMood, type MatchMood } from '@/lib/matchMoods';
 import { FREE_MESSAGE_QUOTA } from '@/lib/quota';
 import { deleteSecureValue, writeSecureValue } from '@/lib/secureKv';
+import { getSupabase } from '@/lib/supabaseClient';
 
 const SESSION_KEY = 'bugece.session-uid';
 const LEGACY_BOOK_KEY = 'bugece.accounts';
@@ -25,7 +14,6 @@ export type MemberAccount = {
   email: string;
   displayName: string;
   passwordHash: string;
-  /** Missing on older password accounts. Google-only accounts have no password. */
   provider?: 'password' | 'google';
   freeMessagesRemaining: number;
   isPro: boolean;
@@ -47,118 +35,87 @@ export function normalizeEmail(value: string): string | null {
   return email;
 }
 
-function firebaseAuth(): Auth {
-  const app = getFirebaseApp();
-  if (!app) throw new Error('Firebase hazır değil.');
-  return getAuth(app);
-}
-
 function authErrorMessage(error: unknown, fallback: string): string {
-  const code = typeof error === 'object' && error && 'code' in error ? String((error as { code: string }).code) : '';
-  if (code === 'auth/email-already-in-use') return 'Bu e-posta zaten kayıtlı. Giriş yap.';
-  if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
-    return 'E-posta veya şifre uyuşmadı.';
-  }
-  if (code === 'auth/invalid-email') return 'Geçerli bir e-posta yaz.';
-  if (code === 'auth/weak-password') return 'Şifre en az 6 karakter olsun.';
-  if (code === 'auth/operation-not-allowed' || code === 'auth/configuration-not-found') {
-    return 'E-posta kaydı Firebase’de kapalı.';
-  }
+  const message = error instanceof Error ? error.message : '';
+  const lower = message.toLowerCase();
+  if (lower.includes('already') || lower.includes('registered')) return 'Bu e-posta zaten kayıtlı. Giriş yap.';
+  if (lower.includes('invalid login') || lower.includes('invalid credentials')) return 'E-posta veya şifre uyuşmadı.';
+  if (lower.includes('email')) return 'Geçerli bir e-posta yaz.';
+  if (lower.includes('password')) return 'Şifre en az 6 karakter olsun.';
+  if (!getSupabase()) return 'Supabase hazır değil.';
   return fallback;
 }
 
-async function writeProfile(account: MemberAccount, created: boolean): Promise<void> {
-  const db = getPresenceDb();
-  if (!db) throw new Error('Veritabanı hazır değil.');
-  const ref = doc(db, 'users', account.accountId);
-  const existing = await getDoc(ref);
-  if (existing.exists() && !created) return;
-  await setDoc(
-    ref,
-    {
-      uid: account.accountId,
-      email: account.email,
-      name: account.displayName,
-      createdAt: existing.exists() ? existing.data().createdAt ?? Date.now() : Date.now(),
-      freeMessagesRemaining: account.freeMessagesRemaining,
-      isPro: account.isPro,
-      provider: account.provider ?? 'password',
-      ...(account.mood ? { mood: account.mood, moodUpdatedAt: Date.now(), matchStatus: 'idle' } : {}),
-    },
-    { merge: true },
-  );
-}
-
-function accountFromProfile(uid: string, data: Record<string, unknown>, emailFallback: string): MemberAccount {
+function accountFromProfile(row: Record<string, unknown>, emailFallback: string): MemberAccount {
+  const mood = typeof row.mood === 'string' && isMatchMood(row.mood) ? row.mood : null;
   return {
-    accountId: uid,
-    email: typeof data.email === 'string' ? data.email : emailFallback,
-    displayName: typeof data.name === 'string' ? data.name : '',
+    accountId: String(row.id ?? ''),
+    email: typeof row.email === 'string' ? row.email : emailFallback,
+    displayName: typeof row.name === 'string' ? row.name : '',
     passwordHash: '',
-    provider: data.provider === 'google' ? 'google' : 'password',
-    freeMessagesRemaining:
-      typeof data.freeMessagesRemaining === 'number' ? data.freeMessagesRemaining : FREE_MESSAGE_QUOTA,
-    isPro: data.isPro === true,
-    mood: isMatchMood(typeof data.mood === 'string' ? data.mood : null) ? (data.mood as MatchMood) : null,
+    provider: row.provider === 'google' ? 'google' : 'password',
+    freeMessagesRemaining: typeof row.free_messages_remaining === 'number' ? row.free_messages_remaining : FREE_MESSAGE_QUOTA,
+    isPro: row.is_pro === true,
+    mood,
   };
 }
 
-export async function listRegisteredUsers(): Promise<MemberAccount[]> {
-  const db = getPresenceDb();
-  if (!db) return [];
-  const snap = await getDocs(collection(db, 'users'));
-  return snap.docs
-    .map((item) => accountFromProfile(item.id, item.data() as Record<string, unknown>, ''))
-    .sort((a, b) => a.email.localeCompare(b.email, 'tr'));
+async function upsertProfile(account: MemberAccount): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase hazır değil.');
+  const { error } = await supabase.from('profiles').upsert({
+    id: account.accountId,
+    email: account.email,
+    name: account.displayName,
+    mood: account.mood ?? null,
+    mood_updated_at: account.mood ? new Date().toISOString() : null,
+    free_messages_remaining: account.freeMessagesRemaining,
+    is_pro: account.isPro,
+    provider: account.provider ?? 'password',
+    match_status: 'idle',
+  });
+  if (error) throw error;
 }
 
-/** Drops the old single-device JSON book. It is not the user directory. */
+export async function listRegisteredUsers(): Promise<MemberAccount[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('profiles').select('*').order('email');
+  if (error || !data) return [];
+  return data.map((row) => accountFromProfile(row as Record<string, unknown>, ''));
+}
+
 export async function clearLegacyLocalAccounts(): Promise<void> {
   await deleteSecureValue(LEGACY_BOOK_KEY);
   await deleteSecureValue(LEGACY_SESSION_KEY);
 }
 
-function waitForAuthUser(auth: Auth): Promise<User | null> {
-  if (auth.currentUser) return Promise.resolve(auth.currentUser);
-  return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      unsubscribe();
-      resolve(user);
-    });
-  });
-}
-
 export async function readSessionAccountId(): Promise<string | null> {
   await clearLegacyLocalAccounts();
-  try {
-    const user = await waitForAuthUser(firebaseAuth());
-    return user?.uid ?? null;
-  } catch {
-    return null;
-  }
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user.id ?? null;
 }
 
-/** Session cache only. Null signs out; it does not delete the Auth user or the profile. */
+/** Session only. Null signs out and does not delete the profile. */
 export async function writeSessionAccountId(accountId: string | null): Promise<void> {
   await clearLegacyLocalAccounts();
   if (!accountId) {
     await deleteSecureValue(SESSION_KEY);
-    try {
-      await firebaseSignOut(firebaseAuth());
-    } catch {
-      // Local session is already cleared.
-    }
+    const supabase = getSupabase();
+    if (supabase) await supabase.auth.signOut().catch(() => undefined);
     return;
   }
   await writeSecureValue(SESSION_KEY, accountId);
 }
 
 export async function loadAccountByUid(uid: string): Promise<MemberAccount | null> {
-  const db = getPresenceDb();
-  if (!db || !uid) return null;
-  const snap = await getDoc(doc(db, 'users', uid));
-  if (!snap.exists()) return null;
-  return accountFromProfile(snap.id, snap.data() as Record<string, unknown>, '');
+  const supabase = getSupabase();
+  if (!supabase || !uid) return null;
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
+  if (error || !data) return null;
+  return accountFromProfile(data as Record<string, unknown>, '');
 }
 
 function validateCredentials(emailInput: string, password: string): { email: string } | AuthResult {
@@ -169,10 +126,10 @@ function validateCredentials(emailInput: string, password: string): { email: str
 }
 
 async function profileForUser(user: User, displayName: string, provider: 'password' | 'google'): Promise<MemberAccount> {
-  const existing = await loadAccountByUid(user.uid);
+  const existing = await loadAccountByUid(user.id);
   if (existing) return existing;
   const account: MemberAccount = {
-    accountId: user.uid,
+    accountId: user.id,
     email: user.email ?? '',
     displayName: displayName.trim().slice(0, 32),
     passwordHash: '',
@@ -180,25 +137,27 @@ async function profileForUser(user: User, displayName: string, provider: 'passwo
     freeMessagesRemaining: FREE_MESSAGE_QUOTA,
     isPro: false,
   };
-  await writeProfile(account, true);
+  await upsertProfile(account);
   return account;
 }
 
-/** Existing email only. Switches the session. Does not delete or overwrite other users. */
 export async function signInWithPassword(emailInput: string, password: string): Promise<AuthResult> {
   const checked = validateCredentials(emailInput, password);
   if ('ok' in checked) return checked;
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: 'Supabase hazır değil.' };
   try {
-    const cred = await signInWithEmailAndPassword(firebaseAuth(), checked.email, password);
-    const account = await profileForUser(cred.user, '', 'password');
-    await writeSessionAccountId(cred.user.uid);
+    const { data, error } = await supabase.auth.signInWithPassword({ email: checked.email, password });
+    if (error || !data.user) return { ok: false, message: authErrorMessage(error, 'Giriş yapılamadı. Tekrar dene.') };
+    const account = await profileForUser(data.user, '', 'password');
+    await writeSessionAccountId(data.user.id);
     return { ok: true, account };
   } catch (error) {
     return { ok: false, message: authErrorMessage(error, 'Giriş yapılamadı. Tekrar dene.') };
   }
 }
 
-/** Creates Auth and users/{uid} together. The same email is an error, not an overwrite. */
+/** Creates the auth user and the profile row together. */
 export async function registerAccount(
   emailInput: string,
   password: string,
@@ -208,10 +167,16 @@ export async function registerAccount(
   const checked = validateCredentials(emailInput, password);
   if ('ok' in checked) return checked;
   if (!isMatchMood(moodInput)) return { ok: false, message: 'Bir ruh hali seç.' };
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: 'Supabase hazır değil.' };
   try {
-    const cred = await createUserWithEmailAndPassword(firebaseAuth(), checked.email, password);
+    const { data, error } = await supabase.auth.signUp({ email: checked.email, password });
+    if (error || !data.user) return { ok: false, message: authErrorMessage(error, 'Hesap kaydedilemedi. Tekrar dene.') };
+    if (!data.session) {
+      return { ok: false, message: 'Supabase e-posta onayı açık. Onayı kapatıp tekrar dene.' };
+    }
     const account: MemberAccount = {
-      accountId: cred.user.uid,
+      accountId: data.user.id,
       email: checked.email,
       displayName: displayNameInput.trim().slice(0, 32),
       passwordHash: '',
@@ -220,15 +185,14 @@ export async function registerAccount(
       isPro: false,
       mood: moodInput,
     };
-    await writeProfile(account, true);
-    await writeSessionAccountId(cred.user.uid);
+    await upsertProfile(account);
+    await writeSessionAccountId(data.user.id);
     return { ok: true, account };
   } catch (error) {
     return { ok: false, message: authErrorMessage(error, 'Hesap kaydedilemedi. Tekrar dene.') };
   }
 }
 
-/** Firebase Google credential. Does not write a local-only account. */
 export async function signInWithGoogle(
   emailInput: string,
   displayNameInput = '',
@@ -237,33 +201,27 @@ export async function signInWithGoogle(
   const email = normalizeEmail(emailInput);
   if (!email) return { ok: false, message: 'Google hesabından e-posta alınamadı.' };
   if (!idToken) return { ok: false, message: 'Google oturumu doğrulanamadı. E-posta ile kayıt ol.' };
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: 'Supabase hazır değil.' };
   try {
-    const cred = await signInWithCredential(firebaseAuth(), GoogleAuthProvider.credential(idToken));
-    const account = await profileForUser(cred.user, displayNameInput, 'google');
-    await writeSessionAccountId(cred.user.uid);
+    const { data, error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
+    if (error || !data.user) return { ok: false, message: authErrorMessage(error, 'Google ile giriş yapılamadı.') };
+    const account = await profileForUser(data.user, displayNameInput, 'google');
+    await writeSessionAccountId(data.user.id);
     return { ok: true, account };
   } catch (error) {
-    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code: string }).code) : '';
-    if (code === 'auth/account-exists-with-different-credential') {
-      return { ok: false, message: 'Bu e-posta şifre ile kayıtlı. Giriş yap.' };
-    }
     return { ok: false, message: authErrorMessage(error, 'Google ile giriş yapılamadı.') };
   }
 }
 
-/** Updates only this uid’s quota fields. Other profiles stay untouched. */
 export async function saveAccountQuota(
   accountId: string,
   quota: { freeMessagesRemaining: number; isPro: boolean },
 ): Promise<void> {
-  const db = getPresenceDb();
-  if (!db || !accountId) return;
-  try {
-    await updateDoc(doc(db, 'users', accountId), {
-      freeMessagesRemaining: quota.freeMessagesRemaining,
-      isPro: quota.isPro,
-    });
-  } catch {
-    // Missing profile is not created here and other users are not written.
-  }
+  const supabase = getSupabase();
+  if (!supabase || !accountId) return;
+  await supabase
+    .from('profiles')
+    .update({ free_messages_remaining: quota.freeMessagesRemaining, is_pro: quota.isPro })
+    .eq('id', accountId);
 }
