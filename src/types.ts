@@ -68,7 +68,7 @@ export interface ChatMessage {
 export interface DirectMessage {
   id: string;
   memberId: string;
-  from: 'self' | 'member';
+  from: 'self' | 'member' | 'bot';
   text: string;
   createdAt: number;
 }

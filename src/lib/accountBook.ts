@@ -1,18 +1,36 @@
+import {
+  GoogleAuthProvider,
+  createUserWithEmailAndPassword,
+  getAuth,
+  onAuthStateChanged,
+  signInWithCredential,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  updateProfile,
+  type Auth,
+  type User as FirebaseUser,
+} from 'firebase/auth';
+import { collection, doc, getDoc, getDocs, limit, query, setDoc } from 'firebase/firestore';
+
+import { getFirebaseApp, getPresenceDb } from '@/lib/firebaseApp';
+import { isMatchMood, type MatchMood } from '@/lib/matchMoods';
 import { FREE_MESSAGE_QUOTA } from '@/lib/quota';
 import { deleteSecureValue, readSecureValue, writeSecureValue } from '@/lib/secureKv';
+import { getSupabase } from '@/lib/supabaseClient';
 
-const BOOK_KEY = 'bugece.accounts';
-const SESSION_KEY = 'bugece.session-account';
+const SESSION_KEY = 'bugece.session-uid';
+const LEGACY_BOOK_KEY = 'bugece.accounts';
+const LEGACY_SESSION_KEY = 'bugece.session-account';
 
 export type MemberAccount = {
   accountId: string;
   email: string;
   displayName: string;
   passwordHash: string;
-  /** Missing on older password accounts. Google-only accounts have no password. */
   provider?: 'password' | 'google';
   freeMessagesRemaining: number;
   isPro: boolean;
+  mood?: MatchMood | null;
 };
 
 export type AccountBook = {
@@ -30,57 +48,99 @@ export function normalizeEmail(value: string): string | null {
   return email;
 }
 
-async function hashPassword(accountId: string, password: string): Promise<string> {
-  const material = new TextEncoder().encode(`bugece:${accountId}:${password}`);
-  const subtle = globalThis.crypto?.subtle;
-  if (subtle) {
-    const digest = await subtle.digest('SHA-256', material);
-    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+function authErrorMessage(error: unknown, fallback: string): string {
+  const code = typeof error === 'object' && error && 'code' in error ? String((error as { code: string }).code) : '';
+  if (code === 'auth/email-already-in-use') return 'Bu e-posta zaten kayıtlı. Giriş yap.';
+  if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found' || code === 'auth/invalid-login-credentials') {
+    return 'E-posta veya şifre uyuşmadı.';
   }
-  let hash = 2166136261;
-  for (const byte of material) {
-    hash ^= byte;
-    hash = Math.imul(hash, 16777619);
-  }
-  return `fnv:${(hash >>> 0).toString(16)}`;
+  if (code === 'auth/network-request-failed') return 'İnternet bağlantısı yok.';
+  if (code === 'auth/weak-password' || code === 'auth/missing-password') return 'Şifre en az 6 karakter olsun.';
+  if (code === 'auth/invalid-email') return 'Geçerli bir e-posta yaz.';
+  const message = error instanceof Error ? error.message : '';
+  const lower = message.toLowerCase();
+  if (lower.includes('already') || lower.includes('registered')) return 'Bu e-posta zaten kayıtlı. Giriş yap.';
+  if (lower.includes('invalid login') || lower.includes('invalid credentials')) return 'E-posta veya şifre uyuşmadı.';
+  return fallback;
 }
 
-export async function readAccountBook(): Promise<AccountBook | null> {
-  const raw = await readSecureValue(BOOK_KEY);
-  if (!raw.ok) return null;
-  if (!raw.value) return { v: 1, accounts: {} };
-  try {
-    const parsed = JSON.parse(raw.value) as Partial<AccountBook>;
-    if (!parsed.accounts || typeof parsed.accounts !== 'object') return null;
-    return { v: 1, accounts: parsed.accounts };
-  } catch {
-    return null;
-  }
+function accountFromUserDoc(uid: string, row: Record<string, unknown>): MemberAccount {
+  const mood = typeof row.mood === 'string' && isMatchMood(row.mood) ? row.mood : null;
+  return {
+    accountId: uid,
+    email: typeof row.email === 'string' ? row.email : '',
+    displayName: typeof row.name === 'string' ? row.name : '',
+    passwordHash: '',
+    provider: row.provider === 'google' ? 'google' : 'password',
+    freeMessagesRemaining: typeof row.freeMessagesRemaining === 'number' ? row.freeMessagesRemaining : FREE_MESSAGE_QUOTA,
+    isPro: row.isPro === true,
+    mood,
+  };
 }
 
-async function writeAccountBook(book: AccountBook): Promise<boolean> {
-  return writeSecureValue(BOOK_KEY, JSON.stringify(book));
+export async function listRegisteredUsers(): Promise<MemberAccount[]> {
+  const db = getPresenceDb();
+  if (!db) return [];
+  const snap = await getDocs(query(collection(db, 'users'), limit(40)));
+  return snap.docs.map((item) => accountFromUserDoc(item.id, item.data() as Record<string, unknown>));
+}
+
+export async function clearLegacyLocalAccounts(): Promise<void> {
+  await deleteSecureValue(LEGACY_BOOK_KEY);
+  await deleteSecureValue(LEGACY_SESSION_KEY);
+}
+
+function firebaseAuth(): Auth | null {
+  const app = getFirebaseApp();
+  if (!app) return null;
+  return getAuth(app);
+}
+
+function waitForFirebaseUser(): Promise<FirebaseUser | null> {
+  const auth = firebaseAuth();
+  if (!auth) return Promise.resolve(null);
+  if (auth.currentUser) return Promise.resolve(auth.currentUser);
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      resolve(user);
+    });
+  });
 }
 
 export async function readSessionAccountId(): Promise<string | null> {
-  const raw = await readSecureValue(SESSION_KEY);
-  if (!raw.ok || !raw.value) return null;
-  return normalizeEmail(raw.value);
+  await clearLegacyLocalAccounts();
+  const firebaseUser = await waitForFirebaseUser();
+  if (firebaseUser) return firebaseUser.uid;
+  const stored = await readSecureValue(SESSION_KEY);
+  if (stored.ok && stored.value) return stored.value;
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user.id ?? null;
 }
 
+/** Session only. Null signs out and does not delete the profile. */
 export async function writeSessionAccountId(accountId: string | null): Promise<void> {
+  await clearLegacyLocalAccounts();
   if (!accountId) {
     await deleteSecureValue(SESSION_KEY);
+    const auth = firebaseAuth();
+    if (auth) await firebaseSignOut(auth).catch(() => undefined);
+    const supabase = getSupabase();
+    if (supabase) await supabase.auth.signOut().catch(() => undefined);
     return;
   }
   await writeSecureValue(SESSION_KEY, accountId);
 }
 
-function withDisplayName(account: MemberAccount): MemberAccount {
-  return {
-    ...account,
-    displayName: typeof account.displayName === 'string' ? account.displayName : '',
-  };
+export async function loadAccountByUid(uid: string): Promise<MemberAccount | null> {
+  if (!uid) return null;
+  const db = getPresenceDb();
+  if (!db) return null;
+  const snap = await getDoc(doc(db, 'users', uid));
+  if (!snap.exists()) return null;
+  return accountFromUserDoc(uid, snap.data() as Record<string, unknown>);
 }
 
 function validateCredentials(emailInput: string, password: string): { email: string } | AuthResult {
@@ -90,108 +150,154 @@ function validateCredentials(emailInput: string, password: string): { email: str
   return { email };
 }
 
-/** Existing email only. Does not create an account or refill the quota. */
+async function touchLogin(user: FirebaseUser): Promise<MemberAccount> {
+  const db = getPresenceDb();
+  if (!db) throw new Error('Veritabanı hazır değil.');
+  const ref = doc(db, 'users', user.uid);
+  const existing = await getDoc(ref);
+  if (!existing.exists()) throw new Error('Profil bulunamadı.');
+  const previous = existing.data() as Record<string, unknown>;
+  await setDoc(ref, { uid: user.uid, lastLoginAt: Date.now() }, { merge: true });
+  return accountFromUserDoc(user.uid, { ...previous, lastLoginAt: Date.now() });
+}
+
 export async function signInWithPassword(emailInput: string, password: string): Promise<AuthResult> {
   const checked = validateCredentials(emailInput, password);
   if ('ok' in checked) return checked;
-
-  const book = await readAccountBook();
-  if (!book) return { ok: false, message: 'Hesaplar okunamadı. Tekrar dene.' };
-
-  const existing = book.accounts[checked.email];
-  if (!existing) return { ok: false, message: 'Bu e-posta kayıtlı değil. Kayıt ol.' };
-  if (existing.provider === 'google' || !existing.passwordHash) {
-    return { ok: false, message: 'Bu hesap Gmail ile açıldı. Gmail ile devam et.' };
+  const auth = firebaseAuth();
+  if (!auth) return { ok: false, message: 'Firebase hazır değil.' };
+  try {
+    const cred = await signInWithEmailAndPassword(auth, checked.email, password);
+    const account = await touchLogin(cred.user);
+    await writeSessionAccountId(cred.user.uid);
+    return { ok: true, account };
+  } catch (error) {
+    return { ok: false, message: authErrorMessage(error, 'Giriş yapılamadı. Tekrar dene.') };
   }
-  const passwordHash = await hashPassword(checked.email, password);
-  if (existing.passwordHash !== passwordHash) return { ok: false, message: 'Şifre uyuşmadı.' };
-  await writeSessionAccountId(checked.email);
-  return { ok: true, account: withDisplayName(existing) };
 }
 
-/** New email starts at the free quota. The same email must sign in instead. */
+/** Creates the auth user and users/{uid} together. Mood is required. Does not overwrite an existing email. */
 export async function registerAccount(
   emailInput: string,
   password: string,
   displayNameInput = '',
+  moodInput = '',
 ): Promise<AuthResult> {
   const checked = validateCredentials(emailInput, password);
   if ('ok' in checked) return checked;
-
-  const book = await readAccountBook();
-  if (!book) return { ok: false, message: 'Hesaplar okunamadı. Tekrar dene.' };
-  if (book.accounts[checked.email]) {
-    return { ok: false, message: 'Bu e-posta zaten kayıtlı. Giriş yap.' };
+  if (!isMatchMood(moodInput)) return { ok: false, message: 'Bir ruh hali seç.' };
+  const auth = firebaseAuth();
+  const db = getPresenceDb();
+  if (!auth || !db) return { ok: false, message: 'Firebase hazır değil.' };
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, checked.email, password);
+    const name = displayNameInput.trim().slice(0, 32) || checked.email.split('@')[0]?.slice(0, 32) || 'Gece';
+    if (displayNameInput.trim()) await updateProfile(cred.user, { displayName: name }).catch(() => undefined);
+    const now = Date.now();
+    await setDoc(doc(db, 'users', cred.user.uid), {
+      uid: cred.user.uid,
+      email: checked.email,
+      name,
+      photoUrl: '',
+      provider: 'password',
+      mood: moodInput,
+      moodUpdatedAt: now,
+      createdAt: now,
+      lastLoginAt: now,
+      matchStatus: 'idle',
+      freeMessagesRemaining: FREE_MESSAGE_QUOTA,
+      isPro: false,
+    });
+    const saved = await getDoc(doc(db, 'users', cred.user.uid));
+    if (!saved.exists()) throw new Error('Profil yazılamadı.');
+    const account = accountFromUserDoc(cred.user.uid, saved.data() as Record<string, unknown>);
+    await writeSessionAccountId(cred.user.uid);
+    return { ok: true, account };
+  } catch (error) {
+    return { ok: false, message: authErrorMessage(error, 'Hesap kaydedilemedi. Tekrar dene.') };
   }
-
-  const account: MemberAccount = {
-    accountId: checked.email,
-    email: checked.email,
-    displayName: displayNameInput.trim().slice(0, 32),
-    passwordHash: await hashPassword(checked.email, password),
-    provider: 'password',
-    freeMessagesRemaining: FREE_MESSAGE_QUOTA,
-    isPro: false,
-  };
-  book.accounts[checked.email] = account;
-  const wrote = await writeAccountBook(book);
-  if (!wrote) return { ok: false, message: 'Hesap kaydedilemedi. Tekrar dene.' };
-  await writeSessionAccountId(checked.email);
-  return { ok: true, account };
 }
 
-/**
- * Same email as a password account restores that stored remaining count.
- * A new Google email starts at the free quota and does not refill an existing one.
- */
-export async function signInWithGoogle(emailInput: string, displayNameInput = ''): Promise<AuthResult> {
-  const email = normalizeEmail(emailInput);
-  if (!email) return { ok: false, message: 'Google hesabından e-posta alınamadı.' };
-
-  const book = await readAccountBook();
-  if (!book) return { ok: false, message: 'Hesaplar okunamadı. Tekrar dene.' };
-
-  const existing = book.accounts[email];
-  if (existing) {
-    const account = withDisplayName(existing);
-    const incoming = displayNameInput.trim().slice(0, 32);
-    if (!account.displayName && incoming) {
-      account.displayName = incoming;
-      book.accounts[email] = account;
-      await writeAccountBook(book);
-    }
-    await writeSessionAccountId(email);
-    return { ok: true, account };
-  }
-
-  const account: MemberAccount = {
-    accountId: email,
-    email,
-    displayName: displayNameInput.trim().slice(0, 32),
+async function writeGoogleUser(user: FirebaseUser, displayNameInput: string): Promise<MemberAccount> {
+  const db = getPresenceDb();
+  if (!db) throw new Error('Veritabanı hazır değil.');
+  const ref = doc(db, 'users', user.uid);
+  const existing = await getDoc(ref);
+  const previous = existing.exists() ? (existing.data() as Record<string, unknown>) : null;
+  const now = Date.now();
+  const name = (displayNameInput || user.displayName || (typeof previous?.name === 'string' ? previous.name : '')).trim().slice(0, 32);
+  await setDoc(
+    ref,
+    {
+      uid: user.uid,
+      email: user.email ?? (typeof previous?.email === 'string' ? previous.email : ''),
+      name,
+      photoUrl: user.photoURL ?? (typeof previous?.photoUrl === 'string' ? previous.photoUrl : ''),
+      provider: 'google',
+      lastLoginAt: now,
+      createdAt: typeof previous?.createdAt === 'number' ? previous.createdAt : now,
+      ...(typeof previous?.mood === 'string' && isMatchMood(previous.mood)
+        ? { mood: previous.mood, moodUpdatedAt: typeof previous.moodUpdatedAt === 'number' ? previous.moodUpdatedAt : now }
+        : {}),
+      matchStatus: previous?.matchStatus === 'waiting' || previous?.matchStatus === 'matched' ? previous.matchStatus : 'idle',
+      freeMessagesRemaining:
+        typeof previous?.freeMessagesRemaining === 'number' ? previous.freeMessagesRemaining : FREE_MESSAGE_QUOTA,
+      isPro: previous?.isPro === true,
+    },
+    { merge: true },
+  );
+  const saved = await getDoc(ref);
+  if (!saved.exists()) throw new Error('Profil yazılamadı.');
+  const row = saved.data() as Record<string, unknown>;
+  return {
+    accountId: user.uid,
+    email: typeof row.email === 'string' ? row.email : user.email ?? '',
+    displayName: typeof row.name === 'string' ? row.name : name,
     passwordHash: '',
     provider: 'google',
-    freeMessagesRemaining: FREE_MESSAGE_QUOTA,
-    isPro: false,
+    freeMessagesRemaining: typeof row.freeMessagesRemaining === 'number' ? row.freeMessagesRemaining : FREE_MESSAGE_QUOTA,
+    isPro: row.isPro === true,
+    mood: typeof row.mood === 'string' && isMatchMood(row.mood) ? row.mood : null,
   };
-  book.accounts[email] = account;
-  const wrote = await writeAccountBook(book);
-  if (!wrote) return { ok: false, message: 'Hesap kaydedilemedi. Tekrar dene.' };
-  await writeSessionAccountId(email);
-  return { ok: true, account };
+}
+
+export async function signInWithGoogle(
+  emailInput: string,
+  displayNameInput = '',
+  idToken = '',
+): Promise<AuthResult> {
+  const email = normalizeEmail(emailInput);
+  if (!email) return { ok: false, message: 'Google hesabından e-posta alınamadı.' };
+  if (!idToken) return { ok: false, message: 'idToken alınamadı. SHA-1 / Web client ID ekle, tekrar dene.' };
+  const auth = firebaseAuth();
+  if (!auth) return { ok: false, message: 'Firebase hazır değil.' };
+  try {
+    const cred = await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+    const account = await writeGoogleUser(cred.user, displayNameInput);
+    await writeSessionAccountId(cred.user.uid);
+    return { ok: true, account };
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code: string }).code) : '';
+    if (code === 'auth/account-exists-with-different-credential') {
+      return { ok: false, message: 'Bu e-posta başka bir yöntemle kayıtlı. Şifre ile gir veya hesapları bağla.' };
+    }
+    if (code === 'auth/network-request-failed') return { ok: false, message: 'İnternet bağlantısı yok.' };
+    if (code === 'auth/invalid-credential' || code === 'auth/missing-id-token') {
+      return { ok: false, message: 'idToken alınamadı. SHA-1 / Web client ID ekle, tekrar dene.' };
+    }
+    return { ok: false, message: authErrorMessage(error, 'Google ile giriş yapılamadı.') };
+  }
 }
 
 export async function saveAccountQuota(
   accountId: string,
   quota: { freeMessagesRemaining: number; isPro: boolean },
 ): Promise<void> {
-  const book = await readAccountBook();
-  if (!book) return;
-  const current = book.accounts[accountId];
-  if (!current) return;
-  book.accounts[accountId] = {
-    ...current,
-    freeMessagesRemaining: quota.freeMessagesRemaining,
-    isPro: quota.isPro,
-  };
-  await writeAccountBook(book);
+  const db = getPresenceDb();
+  if (!db || !accountId) return;
+  await setDoc(
+    doc(db, 'users', accountId),
+    { uid: accountId, freeMessagesRemaining: quota.freeMessagesRemaining, isPro: quota.isPro },
+    { merge: true },
+  );
 }

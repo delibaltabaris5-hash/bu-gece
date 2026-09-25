@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AtmosphereControl } from '@/components/AtmosphereControl';
 import { AtmosphereHost } from '@/hooks/useAtmosphere';
+import { usePresenceSession } from '@/hooks/usePresence';
 import '@/lib/googleAuth';
 import { reconcileSecureQuota, watchSecureQuotaAfterHydration } from '@/lib/secureQuota';
 import { useAppStore } from '@/store/useAppStore';
@@ -21,6 +22,7 @@ function AtmosphereChrome() {
 }
 
 export default function RootLayout() {
+  usePresenceSession();
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(night.bg).catch(() => undefined);
     let settled = false;

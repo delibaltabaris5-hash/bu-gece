@@ -8,7 +8,6 @@ export default function Gate() {
   const hydrated = useAppStore((state) => state.hydrated);
   const onboarded = useAppStore((state) => state.onboarded);
   const authStepDone = useAppStore((state) => state.authStepDone);
-  const accountId = useAppStore((state) => state.accountId);
 
   if (!hydrated) {
     return (
@@ -18,7 +17,7 @@ export default function Gate() {
     );
   }
 
-  if (!authStepDone && !accountId) return <Redirect href="/giris" />;
+  if (!authStepDone) return <Redirect href="/giris" />;
   if (!onboarded) return <Redirect href="/onboarding" />;
   return <Redirect href="/(tabs)" />;
 }

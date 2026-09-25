@@ -64,7 +64,7 @@ cd android && ./gradlew assembleDebug
 4. Ücretsiz kullanıcı odaya 10 mesaj yazabilir. Bir kişiye dokununca yalnızca simge ve `Felsefe_4821` gibi geçici numara görünür. Doğrudan mesaj duvara düşer.
 5. **Pro’yu aç** kilidi bu cihazda açar. Profiller ve doğrudan mesaj kullanılabilir. **Ayarlar** içinden Pro kapatılabilir.
 
-Sohbet, planlar ve satın alma bu sürümde cihazın içindedir. Sunucu, push ve gerçek ödeme yoktur.
+Sohbet mesajları, planlar ve satın alma bu sürümde cihazın içindedir. Sohbetler → Genel, Firebase yapılandırılmışsa Firestore’daki çevrimiçi hesapları okur; değilse tohum listesi durur. Push ve gerçek ödeme yoktur.
 
 ## Ücretsiz ve Pro
 
@@ -101,7 +101,7 @@ Tam koruma için kota sunucuda tutulmalı ve hesap Apple, Google veya telefon nu
 - Web, port 8081: `http://localhost:8081`
 - Diğer kayıtlı kökler: `https://localhost`, `http://localhost`, `http://127.0.0.1`, `https://127.0.0.1`
 
-Konsolda `[bu-gece] Google redirectUri` satırı, o çalıştırmada kullanılan adresi yazar. İstek yetkilendirme kodu + PKCE kullanır (`response_type=code`) ve web istemci kimliğini gönderir, çünkü yönlendirme adresleri o istemciye ekli. Yeni bir Gmail adresi 10 mesajla hesap olur. Aynı e-posta kayıtlı sayıyı geri getirir. Google bitmezse Türkçe açıklama çıkar ve e-posta kayıt formu açılır.
+Konsolda `[bu-gece] Google redirectUri` satırı, o çalıştırmada kullanılan adresi yazar. İstek `response_type=id_token` kullanır ve web istemci kimliğini gönderir, çünkü yönlendirme adresleri o istemciye ekli. Web `promptAsync` ile kalır. Expo Go Google’ı doğrudan açmaz: `https://auth.expo.io/@anonymous/bu-gece/start?authUrl=…&returnUrl=…` açılır. `returnUrl`, `Linking.createURL('expo-auth-session')` değeridir. Kimlik belirteci dönüş adresinin sorgu veya parçasındadır; vekil dönüşünde kod takası yoktur. Yeni bir Gmail adresi 10 mesajla hesap olur. Aynı e-posta kayıtlı sayıyı geri getirir. Google bitmezse Türkçe açıklama çıkar ve e-posta kayıt formu açılır.
 
 Expo yalnızca `EXPO_PUBLIC_` ile başlayan değişkenleri uygulamaya koyar.
 
@@ -113,6 +113,33 @@ OAuth izin ekranı şu an **External / Testing**. Test kullanıcıları: `canasl
 
 Ayarlar’da **Giriş yap**, **Hesabım** ve **Çıkış yap** durur. Yazmak üye hesabı ister.
 
+### Canlı Genel (Firestore)
+
+Sohbetler → Genel, `bu-gece` projesindeki Firestore `presence` koleksiyonunu okur (üretim, bölge `europe-west1`). Son 20 dakikadaki `lastSeen` baloncuk olur; `online: false` tek başına düşürmez. Başka biri varsa kendi hesabın listelenmez; tek hesap sensen bir kez görünürsün. Canlı liste varsa altında `Canlı · N kişi` yazar. Dinleyici hata verirse veya liste boşsa ekran `src/data/members.ts` tohumlarına döner. Tohum dosyaları durur.
+
+Giriş ve onboarding bitince uygulama `presence/{accountId}` yazar (`accountId` küçük harf e-postadır): `emailHash`, geçici `displayNick`, `gender`, `mood`, `lastSeen`, `online: true`. Ön plan, Genel odağı ve yaklaşık 4 dakikalık nabız bunu yeniler. Yalnızca çıkış veya başka hesaba geçiş `lastSeen` değerini pencerenin dışına alır.
+
+Web istemci ayarı `.env` ve `.env.example` içindedir. Expo yalnızca `EXPO_PUBLIC_` adlarını alır. Boş değer olursa `src/lib/firebaseApp.ts` aynı bu-gece web uygulamasını kullanır.
+
+```bash
+EXPO_PUBLIC_FIREBASE_API_KEY=AIzaSyBdQN11BwwxNVFImZiK7cz-iltcH73Vtqg
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=bu-gece.firebaseapp.com
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=bu-gece
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=bu-gece.firebasestorage.app
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=746154431428
+EXPO_PUBLIC_FIREBASE_APP_ID=1:746154431428:web:0ba9a25181417a76414a91
+```
+
+Canlı kişiye yazılan mesaj `dmThreads/{emailA__emailB}/messages` içine gider ve karşı cihazda görünür. Tohum kişiler yerel bot yanıtında kalır. Ücretsiz planda canlı mesaj da aynı mesaj hakkını düşürür.
+
+Yayımlanmış kural: `presence/{userId}` ve `dmThreads/{threadId}/messages/{messageId}` için `allow read, write: if true`. Belge kimliği e-posta olduğu için adres, çevrimiçi durum ve mesaj açıktır. TODO: yazmayı Firebase Auth ile kilitle. `firebase.json` Hosting sayfalarını yayınlamaz. Kurallar:
+
+```bash
+npx firebase-tools deploy --only firestore:rules --project bu-gece
+```
+
+Ruh Hali, canlı listede aynı tempo varsa onları gösterir; yoksa tohum eşleşmesi durur.
+
 ## Atmosfer
 
 Arka plan döngüsü **Echoes of Solitude** (Discomfuse). Parça [Pixabay](https://pixabay.com/music/main-title-echoes-of-solitude-277006/) üzerindedir ve **Pixabay Content License** ile kullanılır. Dosya: `assets/audio/echoes-of-solitude.mp3`. Uygulama açılınca ses yaklaşık 0.15’te başlar; **Müziği yükselt** ve **Müziği kıs** seçimi cihazda kalır. Hans Zimmer kaydı yoktur.
@@ -121,6 +148,7 @@ Arka plan döngüsü **Echoes of Solitude** (Discomfuse). Parça [Pixabay](https
 
 - Expo SDK 57, React Native, TypeScript, Expo Router
 - Zustand + AsyncStorage, ücretsiz kota için ek olarak `expo-secure-store` ve `expo-application`
+- Firebase JS SDK (`firebase` 12). Firestore presence. Yapılandırma yoksa Genel tohum listesinde kalır. Expo Go ile çalışır; React Native Firebase kullanılmaz
 - `src/app` ekranlar, `src/data` odalar ve konular, `src/store` durum, `src/billing` ödeme sınırı
 
 ```bash

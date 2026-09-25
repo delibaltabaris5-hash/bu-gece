@@ -78,14 +78,9 @@ export function InterestBubble({
           style={{ width: diameter - ring * 2, height: diameter - ring * 2, borderRadius: diameter / 2 }}
         />
         {hero ? (
-          <Text
-            style={[
-              styles.heroLabel,
-              { fontSize: labelSize, bottom: Math.max(8, diameter * 0.08) },
-            ]}
-          >
-            {name}
-          </Text>
+          <View style={styles.heroPlate} pointerEvents="none">
+            <Text style={[styles.heroLabel, { fontSize: labelSize }]}>{name}</Text>
+          </View>
         ) : null}
       </View>
       {distanceLabel ? (
@@ -126,17 +121,21 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  heroLabel: {
+  heroPlate: {
     position: 'absolute',
-    left: 8,
-    right: 8,
+    left: 10,
+    right: 10,
+    top: '38%',
+    borderRadius: 12,
+    backgroundColor: 'rgba(4, 12, 24, 0.82)',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  heroLabel: {
     textAlign: 'center',
     color: night.text,
     fontFamily: fontFamily.serif,
-    fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.85)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
+    fontWeight: '700',
     ...Platform.select({
       android: { includeFontPadding: false },
       default: {},

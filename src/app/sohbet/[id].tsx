@@ -1,22 +1,27 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ChatComposer } from '@/components/ChatComposer';
 import { MessageBubble } from '@/components/MessageBubble';
 import { SilhouetteBubble } from '@/components/ProfileBubble';
 import { PrimaryButton } from '@/components/ui';
 import { getMember, memberFacingName } from '@/data/members';
 import { getRoom } from '@/data/rooms';
+import { BOT_UNAVAILABLE, replyAsBot } from '@/lib/botService';
+import { chatIdFor, newMessageId, subscribeChat, writeChatMessage, type ChatMessageDoc } from '@/lib/chats';
+import { decodeRouteId } from '@/lib/liveDm';
+import { cachedLivePerson, fetchLivePerson, normalizeAccountId, presenceFacingName, type LivePerson } from '@/lib/presence';
 import { useAppStore } from '@/store/useAppStore';
 import { fontFamily, night, radius, space } from '@/theme';
 import type { DirectMessage, Gender } from '@/types';
@@ -25,61 +30,258 @@ export default function SohbetThreadScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string }>();
-  const member = getMember(params.id);
+  const rawId = typeof params.id === 'string' ? params.id : undefined;
+  const memberId = decodeRouteId(rawId);
+  const seed = getMember(memberId);
   const isPro = useAppStore((state) => state.isPro);
   const accountId = useAppStore((state) => state.accountId);
   const gender = useAppStore((state) => state.gender);
   const stableNick = useAppStore((state) => state.stableNick);
   const tempNick = useAppStore((state) => state.tempNick);
   const remaining = useAppStore((state) => state.freeMessagesRemaining);
-  const thread = useAppStore((state) => (member ? state.directMessages[member.id] : undefined));
+  const thread = useAppStore((state) => (memberId ? state.directMessages[memberId] : undefined));
   const postDirectMessage = useAppStore((state) => state.postDirectMessage);
-  const [draft, setDraft] = useState('');
+  const spendMessageCredit = useAppStore((state) => state.spendMessageCredit);
+  const [live, setLive] = useState<LivePerson | null>(null);
+  const [resolvedFor, setResolvedFor] = useState<string | undefined>(seed ? memberId : undefined);
+  const [liveMessages, setLiveMessages] = useState<ChatMessageDoc[]>([]);
+  const [botDrafts, setBotDrafts] = useState<ChatMessageDoc[]>([]);
+  const [failed, setFailed] = useState<ChatMessageDoc[]>([]);
+  const [sendError, setSendError] = useState('');
 
-  const data = useMemo(() => [...(thread ?? [])].reverse(), [thread]);
+  useEffect(() => {
+    if (!memberId || seed) {
+      setLive(null);
+      setResolvedFor(memberId);
+      return;
+    }
+    const cached = cachedLivePerson(memberId);
+    if (cached) {
+      setLive(cached);
+      setResolvedFor(memberId);
+      return;
+    }
+    let cancel = false;
+    void fetchLivePerson(memberId).then((person) => {
+      if (cancel) return;
+      setLive(person);
+      setResolvedFor(memberId);
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [memberId, seed]);
+
   const signedIn = Boolean(accountId);
   const quotaBlocked = signedIn && !isPro && remaining <= 0;
+  const room = seed ? getRoom(seed.roomId) : undefined;
+  const matchedLive =
+    live && memberId && normalizeAccountId(live.accountId) === normalizeAccountId(memberId) ? live : null;
+  const peerUid = matchedLive?.uid || (!seed ? memberId ?? '' : '');
+  const liveThreadId = accountId && peerUid && !seed ? chatIdFor(accountId, peerUid) : null;
 
-  if (!member) {
+  useEffect(() => {
+    if (!liveThreadId) {
+      setLiveMessages([]);
+      return;
+    }
+    return subscribeChat(liveThreadId, setLiveMessages, () => setSendError('Sohbet şu an okunamadı.'));
+  }, [liveThreadId]);
+
+  const data = useMemo(() => {
+    if (!liveThreadId || !accountId || !peerUid) return [...(thread ?? [])].reverse();
+    const selfId = accountId.trim();
+    const remote = liveMessages.map((message) => ({
+      id: message.id,
+      memberId: peerUid,
+      from: message.senderType === 'bot' ? ('bot' as const) : message.senderId === selfId ? ('self' as const) : ('member' as const),
+      text: message.text,
+      createdAt: message.createdAt || Date.now(),
+      status: message.status,
+    }));
+    const pending = failed.filter((message) => !liveMessages.some((item) => item.id === message.id));
+    const drafts = botDrafts.filter((message) => !liveMessages.some((item) => item.id === message.id));
+    return [...remote, ...drafts.map((message) => ({
+      id: message.id,
+      memberId: peerUid,
+      from: 'bot' as const,
+      text: message.text,
+      createdAt: message.createdAt,
+      status: 'sent' as const,
+    })), ...pending.map((message) => ({
+      id: message.id,
+      memberId: peerUid,
+      from: 'self' as const,
+      text: message.text,
+      createdAt: message.createdAt,
+      status: 'failed' as const,
+    }))].reverse();
+  }, [accountId, botDrafts, failed, liveMessages, liveThreadId, peerUid, thread]);
+  const face = seed
+    ? {
+        id: seed.id,
+        gender: seed.gender,
+        label: memberFacingName(seed, isPro),
+        subtitle: isPro
+          ? `${room?.name ?? 'Sohbet'} · ${seed.bio}`
+          : 'Ücretsiz · simge ve geçici numara',
+      }
+    : matchedLive
+      ? {
+          id: matchedLive.accountId,
+          gender: matchedLive.gender,
+          label: presenceFacingName(matchedLive.displayNick, isPro),
+          subtitle: isPro ? 'Çevrimiçi' : 'Ücretsiz · simge ve geçici numara',
+        }
+      : accountId && memberId && !seed && resolvedFor === memberId
+        ? {
+            id: memberId,
+            gender: 'kadin' as Gender,
+            label: 'Eşleşme',
+            subtitle: 'Aynı ruh hali',
+          }
+        : null;
+
+  if (!face) {
     return (
       <View style={styles.missing}>
-        <Text style={styles.missingText}>Kişi bulunamadı.</Text>
+        {resolvedFor !== memberId ? (
+          <ActivityIndicator color={night.glowBright} />
+        ) : (
+          <Text style={styles.missingText}>Kişi bulunamadı.</Text>
+        )}
       </View>
     );
   }
 
-  const room = getRoom(member.roomId);
   const selfGender: Gender = gender ?? 'kadin';
-  const label = memberFacingName(member, isPro);
   const selfName = isPro ? stableNick || 'Sen' : tempNick || 'Sen';
 
-  const renderItem = ({ item }: { item: DirectMessage }) => {
+  const renderItem = ({ item }: { item: DirectMessage & { status?: 'sending' | 'sent' | 'failed' } }) => {
     const mine = item.from === 'self';
+    const autoBot = item.from === 'bot' || (Boolean(seed) && !mine);
     return (
       <MessageBubble
         mine={mine}
-        gender={mine ? selfGender : member.gender}
-        name={mine ? selfName : label}
+        bot={autoBot}
+        glyph={room?.mark ?? '✶'}
+        gender={mine ? selfGender : face.gender}
+        name={mine ? selfName : autoBot ? face.label : face.label}
         text={item.text}
         createdAt={item.createdAt}
+        status={item.status}
+        onRetry={
+          item.status === 'failed' && liveThreadId && accountId && peerUid
+            ? () => {
+                void writeChatMessage({
+                  chatId: liveThreadId,
+                  messageId: newMessageId(),
+                  senderId: accountId,
+                  senderType: 'user',
+                  text: item.text,
+                  members: [accountId, peerUid],
+                }).then((ok) => {
+                  if (ok) setFailed((current) => current.filter((failedItem) => failedItem.id !== item.id));
+                });
+              }
+            : undefined
+        }
       />
     );
   };
 
-  const send = () => {
+  const send = async (text: string) => {
     if (!signedIn) {
       router.push('/giris');
-      return;
+      return false;
     }
-    if (quotaBlocked) return;
-    const sent = postDirectMessage(member.id, draft);
-    if (sent) setDraft('');
+    if (quotaBlocked) return false;
+    if (accountId && liveThreadId && peerUid && !seed) {
+      setSendError('');
+      const messageId = newMessageId();
+      const ok = await writeChatMessage({
+        chatId: liveThreadId,
+        messageId,
+        senderId: accountId,
+        senderType: 'user',
+        text,
+        members: [accountId, peerUid],
+      });
+      if (!ok) {
+        setFailed((current) => [
+          ...current,
+          {
+            id: messageId,
+            chatId: liveThreadId,
+            senderId: accountId,
+            senderType: 'user',
+            text,
+            createdAt: Date.now(),
+            type: 'text',
+            status: 'failed',
+          },
+        ]);
+        setSendError('Mesaj iletilemedi.');
+        return false;
+      }
+      spendMessageCredit();
+      const history = [...liveMessages, ...botDrafts].slice(-24).map((message) => ({
+        role: message.senderType === 'bot' ? ('bot' as const) : ('user' as const),
+        text: message.text,
+      }));
+      void replyAsBot({
+        botId: 'bot-eslik',
+        userId: accountId,
+        userName: selfName,
+        history,
+        text,
+      }).then((replyText) => {
+        if (!replyText || !liveThreadId) return;
+        const messageId = newMessageId();
+        const draft: ChatMessageDoc = {
+          id: messageId,
+          chatId: liveThreadId,
+          senderId: 'bot-eslik',
+          senderType: 'bot',
+          text: replyText,
+          createdAt: Date.now(),
+          type: 'text',
+          status: 'sent',
+        };
+        setBotDrafts((current) => [...current, draft]);
+        return writeChatMessage({
+          chatId: liveThreadId,
+          messageId,
+          senderId: 'bot-eslik',
+          senderType: 'bot',
+          text: replyText,
+          members: [accountId, peerUid],
+        });
+      }).catch(() => {
+        if (!liveThreadId) return;
+        setBotDrafts((current) => [
+          ...current,
+          {
+            id: newMessageId(),
+            chatId: liveThreadId,
+            senderId: 'bot-eslik',
+            senderType: 'bot',
+            text: BOT_UNAVAILABLE,
+            createdAt: Date.now(),
+            type: 'text',
+            status: 'sent',
+          },
+        ]);
+      });
+      return true;
+    }
+    return postDirectMessage(face.id, text);
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'android' ? undefined : 'padding'}
     >
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Geri" onPress={() => router.back()}>
@@ -87,10 +289,9 @@ export default function SohbetThreadScreen() {
         </Pressable>
         <SilhouetteBubble diameter={42} />
         <View style={styles.headerCopy}>
-          <Text style={styles.title}>{label}</Text>
-          <Text style={styles.subtitle}>
-            {isPro ? `${room?.name ?? 'Sohbet'} · ${member.bio}` : 'Ücretsiz · simge ve geçici numara'}
-          </Text>
+          <Text style={styles.title}>{face.label}</Text>
+          <Text style={styles.subtitle}>{face.subtitle}</Text>
+          {seed ? <Text style={styles.subtitle}>Sohbetinize bot eşlik ediyor.</Text> : null}
         </View>
       </View>
 
@@ -116,49 +317,34 @@ export default function SohbetThreadScreen() {
         />
       )}
 
-      <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        {!signedIn ? (
+      {!signedIn ? (
+        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={styles.paywall}>
             <Text style={styles.payTitle}>Üye girişi</Text>
             <Text style={styles.payBody}>Misafir gezinebilir. Mesaj hakkı hesaba bağlıdır.</Text>
             <PrimaryButton label="Giriş yap" onPress={() => router.push('/giris')} />
           </View>
-        ) : quotaBlocked ? (
+        </View>
+      ) : quotaBlocked ? (
+        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={styles.paywall}>
             <Text style={styles.payTitle}>Ücretsiz mesaj hakkın doldu</Text>
             <Text style={styles.payBody}>Pro sınırsız yazar ve sabit adı açar.</Text>
             <PrimaryButton label="Pro’yu aç" onPress={() => router.push('/pro')} />
           </View>
-        ) : (
-          <>
-            <Text style={styles.hint}>
-              {isPro
+        </View>
+      ) : (
+        <ChatComposer
+          hint={
+            sendError
+              ? sendError
+              : isPro
                 ? 'Pro: sabit ad açık. Sınırsız mesaj.'
-                : `Ücretsiz: ${remaining} mesaj kaldı. Oda ve sohbet aynı hakkı kullanır.`}
-            </Text>
-            <View style={styles.composerRow}>
-              <TextInput
-                value={draft}
-                onChangeText={setDraft}
-                placeholder="Bir cümle bırak"
-                placeholderTextColor={night.muted}
-                style={styles.input}
-                maxLength={400}
-                multiline
-              />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Gönder"
-                disabled={!draft.trim()}
-                onPress={send}
-                style={[styles.send, !draft.trim() && styles.sendOff]}
-              >
-                <Text style={styles.sendLabel}>Gönder</Text>
-              </Pressable>
-            </View>
-          </>
-        )}
-      </View>
+                : `Ücretsiz: ${remaining} mesaj kaldı. Oda ve sohbet aynı hakkı kullanır.`
+          }
+          onSend={send}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }

@@ -1,5 +1,6 @@
 import { setAudioModeAsync, useAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 
 import { clampAtmosphereVolume } from '@/lib/atmosphere';
 import { useAppStore } from '@/store/useAppStore';
@@ -23,16 +24,19 @@ function applyVolume(player: AudioPlayer, volume: number) {
   player.muted = next === 0;
 }
 
-/** Starts playback after a volume gesture if autoplay was blocked. */
+/** Starts or resumes the loop. A blocked autoplay must be retried; `playing` can stay true after a rejected play(). */
 export function nudgeAtmospherePlayback() {
   const player = boundPlayer;
   if (!player) return;
   applyVolume(player, useAppStore.getState().atmosphereVolume);
   if (player.muted) return;
   try {
-    if (!player.playing) player.play();
+    const started = player.play() as unknown;
+    if (started && typeof (started as Promise<void>).catch === 'function') {
+      void (started as Promise<void>).catch(() => undefined);
+    }
   } catch {
-    // Web autoplay can reject until this gesture. The button already updated volume.
+    // The next tap retries. Volume is already applied.
   }
 }
 
@@ -81,6 +85,17 @@ export function AtmosphereHost() {
     if (!hydrated) return;
     nudgeAtmospherePlayback();
   }, [hydrated, player]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const unlock = () => nudgeAtmospherePlayback();
+    window.addEventListener('pointerdown', unlock, true);
+    window.addEventListener('keydown', unlock, true);
+    return () => {
+      window.removeEventListener('pointerdown', unlock, true);
+      window.removeEventListener('keydown', unlock, true);
+    };
+  }, [player]);
 
   return null;
 }

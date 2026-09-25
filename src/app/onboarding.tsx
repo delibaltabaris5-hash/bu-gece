@@ -16,13 +16,12 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const hydrated = useAppStore((state) => state.hydrated);
   const authStepDone = useAppStore((state) => state.authStepDone);
-  const accountId = useAppStore((state) => state.accountId);
   const completeOnboarding = useAppStore((state) => state.completeOnboarding);
   const [step, setStep] = useState<Step>('gender');
   const [gender, setGender] = useState<Gender | null>(null);
   const [roomId, setRoomId] = useState<RoomId | null>(null);
   const [mood, setMood] = useState<Mood | null>(null);
-  if (hydrated && !authStepDone && !accountId) return <Redirect href="/giris" />;
+  if (hydrated && !authStepDone) return <Redirect href="/giris" />;
 
   const finish = (nextMood: Mood | null) => {
     if (!gender || !roomId) return;

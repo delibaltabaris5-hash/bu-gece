@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist, type PersistStorage } from 'zustand/middleware';
 
 import { purchasePro } from '@/billing/mockProBilling';
-import { botReply, dmReply } from '@/data/bot';
+import { BOT_UNAVAILABLE, replyAsBot, type BotTurn } from '@/lib/botService';
 import { assertCatalog } from '@/data/catalog';
 import { getRoom } from '@/data/rooms';
 import { buildSeedMessages } from '@/data/seedMessages';
@@ -11,6 +11,7 @@ import { topicForDay } from '@/data/topics';
 import { topicBody, todayKey } from '@/lib/format';
 import { pickStableNick, pickTempNumber } from '@/lib/identity';
 import { ATMOSPHERE_DEFAULT_VOLUME, clampAtmosphereVolume } from '@/lib/atmosphere';
+import { markPresenceOffline } from '@/lib/presence';
 import { FREE_MESSAGE_QUOTA } from '@/lib/quota';
 import type {
   ChatMessage,
@@ -53,6 +54,8 @@ interface AppState extends PersistedSlice {
   ensureDailyTopic: (roomId: RoomId) => void;
   postRoomMessage: (roomId: RoomId, text: string) => boolean;
   postDirectMessage: (memberId: string, text: string) => boolean;
+  /** Live Firestore DMs use this so the local bot reply is not sent. */
+  spendMessageCredit: () => boolean;
   setMood: (mood: Mood) => void;
   setAtmosphereVolume: (value: number) => void;
   continueAsGuest: () => void;
@@ -171,12 +174,11 @@ export const useAppStore = create<AppState>()(
         });
       },
       postRoomMessage: (roomId, text) => {
-        const trimmed = text.trim().slice(0, 400);
+        const trimmed = text.trim().slice(0, 2000);
         if (!trimmed) return false;
         const state = get();
         if (!state.accountId) return false;
         if (!state.isPro && state.freeMessagesRemaining <= 0) return false;
-        const room = getRoom(roomId);
         const now = Date.now();
         const current = state.roomMessages[roomId] ?? [];
         const userMessage: ChatMessage = {
@@ -195,36 +197,72 @@ export const useAppStore = create<AppState>()(
             [roomId]: trimThread([...current, userMessage]),
           },
         });
-        const selfCount = current.filter((item) => item.authorKind === 'self').length;
-        const asked = trimmed.includes('?');
-        if (!asked && selfCount % 2 === 1) return true;
-        const replyText = botReply(room?.name ?? 'Oda', selfCount + trimmed.length);
-        setTimeout(() => {
-          const latest = get().roomMessages[roomId] ?? [];
-          const reply: ChatMessage = {
-            id: `bot_reply_${roomId}_${Date.now()}`,
-            roomId,
-            authorKind: 'bot',
-            text: replyText,
-            createdAt: Date.now(),
-          };
-          set({
-            roomMessages: {
-              ...get().roomMessages,
-              [roomId]: trimThread([...latest, reply]),
-            },
+        const history: BotTurn[] = current.slice(-24).map((item) => ({
+          role: item.authorKind === 'bot' ? 'bot' : 'user',
+          text: item.text,
+        }));
+        const userName = state.accountName || state.tempNick || 'sen';
+        void replyAsBot({
+          botId: `bot-${roomId}`,
+          userId: state.accountId,
+          userName,
+          history,
+          text: trimmed,
+        })
+          .then((replyText) => {
+            if (!replyText) return;
+            const latest = get().roomMessages[roomId] ?? [];
+            const reply: ChatMessage = {
+              id: `bot_reply_${roomId}_${Date.now()}`,
+              roomId,
+              authorKind: 'bot',
+              text: replyText,
+              createdAt: Date.now(),
+            };
+            set({
+              roomMessages: {
+                ...get().roomMessages,
+                [roomId]: trimThread([...latest, reply]),
+              },
+            });
+          })
+          .catch(() => {
+            const latest = get().roomMessages[roomId] ?? [];
+            const reply: ChatMessage = {
+              id: `bot_fail_${roomId}_${Date.now()}`,
+              roomId,
+              authorKind: 'bot',
+              text: BOT_UNAVAILABLE,
+              createdAt: Date.now(),
+            };
+            set({
+              roomMessages: {
+                ...get().roomMessages,
+                [roomId]: trimThread([...latest, reply]),
+              },
+            });
           });
-        }, 800);
         return true;
       },
       setAtmosphereVolume: (value) => {
         set({ atmosphereVolume: clampAtmosphereVolume(value) });
       },
       continueAsGuest: () => set({ authStepDone: true }),
-      signOut: () => set({ accountId: null, accountEmail: null, accountName: '' }),
+      signOut: () => {
+        const id = get().accountId;
+        if (id) void markPresenceOffline(id);
+        set({ accountId: null, accountEmail: null, accountName: '' });
+      },
       setMood: (mood) => set({ mood }),
+      spendMessageCredit: () => {
+        const state = get();
+        if (!state.accountId) return false;
+        if (!state.isPro && state.freeMessagesRemaining <= 0) return false;
+        if (!state.isPro) set({ freeMessagesRemaining: state.freeMessagesRemaining - 1 });
+        return true;
+      },
       postDirectMessage: (memberId, text) => {
-        const trimmed = text.trim().slice(0, 400);
+        const trimmed = text.trim().slice(0, 2000);
         if (!trimmed) return false;
         const state = get();
         if (!state.accountId) return false;
@@ -247,30 +285,57 @@ export const useAppStore = create<AppState>()(
             [memberId]: trimThread([...current, mine]),
           },
         });
-        const replyText = dmReply(current.length + trimmed.length);
-        setTimeout(() => {
-          const latest = get().directMessages[memberId] ?? [];
-          const reply: DirectMessage = {
-            id: `dm_member_${memberId}_${Date.now()}`,
-            memberId,
-            from: 'member',
-            text: replyText,
-            createdAt: Date.now(),
-          };
-          set({
-            directMessages: {
-              ...get().directMessages,
-              [memberId]: trimThread([...latest, reply]),
-            },
+        const history: BotTurn[] = current.slice(-24).map((item) => ({
+          role: item.from === 'self' ? 'user' : 'bot',
+          text: item.text,
+        }));
+        void replyAsBot({
+          botId: `bot-${memberId}`,
+          userId: state.accountId,
+          userName: state.accountName || state.tempNick || 'sen',
+          history,
+          text: trimmed,
+        })
+          .then((replyText) => {
+            if (!replyText) return;
+            const latest = get().directMessages[memberId] ?? [];
+            const reply: DirectMessage = {
+              id: `dm_bot_${memberId}_${Date.now()}`,
+              memberId,
+              from: 'bot',
+              text: replyText,
+              createdAt: Date.now(),
+            };
+            set({
+              directMessages: {
+                ...get().directMessages,
+                [memberId]: trimThread([...latest, reply]),
+              },
+            });
+          })
+          .catch(() => {
+            const latest = get().directMessages[memberId] ?? [];
+            const reply: DirectMessage = {
+              id: `dm_bot_fail_${memberId}_${Date.now()}`,
+              memberId,
+              from: 'bot',
+              text: BOT_UNAVAILABLE,
+              createdAt: Date.now(),
+            };
+            set({
+              directMessages: {
+                ...get().directMessages,
+                [memberId]: trimThread([...latest, reply]),
+              },
+            });
           });
-        }, 700);
         return true;
       },
     }),
     {
       name: 'bu-gece-v1',
       storage: guardedStorage,
-      version: 4,
+      version: 7,
       migrate: (persisted, version) => {
         const state = { ...(persisted as PersistedSlice) };
         // Missing count only: a number already stored (including a used 0–2 balance)
@@ -286,6 +351,13 @@ export const useAppStore = create<AppState>()(
           if (typeof state.accountEmail !== 'string') state.accountEmail = null;
           if (typeof state.accountName !== 'string') state.accountName = '';
           if (typeof state.authStepDone !== 'boolean') state.authStepDone = false;
+        }
+        if (version < 7) {
+          // The old session was a local JSON seat, not a Firebase uid.
+          state.authStepDone = false;
+          state.accountId = null;
+          state.accountEmail = null;
+          state.accountName = '';
         }
         return state;
       },

@@ -1,21 +1,25 @@
-import { ResponseType } from 'expo-auth-session';
+import * as AuthSession from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
-import { useEffect, useMemo, useRef } from 'react';
-import { Image, Pressable, StyleSheet, Text } from 'react-native';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
+import { useEffect, useRef } from 'react';
+import { Image, Platform, Pressable, StyleSheet, Text } from 'react-native';
 
 import type { AuthSessionResult } from 'expo-auth-session';
 
 import {
-  exchangeGoogleCode,
+  expoProxyProject,
   fetchGoogleProfile,
   GOOGLE_AUTH_FAILED,
+  googleClientIds,
   googleConfigMessage,
-  resolveGoogleAuth,
-  type GoogleAuthSetup,
+  googleRedirectUri,
+  isGoogleAuthConfigured,
+  parseGoogleError,
 } from '@/lib/googleAuth';
 import { fontFamily } from '@/theme';
 
-type Profile = { email: string; name: string };
+type Profile = { email: string; name: string; idToken: string };
 
 type Props = {
   disabled?: boolean;
@@ -26,8 +30,7 @@ type Props = {
 };
 
 export function GoogleSignInButton(props: Props) {
-  const setup = useMemo(() => resolveGoogleAuth(), []);
-  if (!setup) {
+  if (!isGoogleAuthConfigured()) {
     return (
       <GmailPill
         disabled={props.disabled}
@@ -38,32 +41,26 @@ export function GoogleSignInButton(props: Props) {
       />
     );
   }
-  if (!setup.canPrompt) {
-    return (
-      <GmailPill
-        disabled={props.disabled}
-        onPress={() => {
-          props.onMessage(setup.blockedReason);
-          props.onNeedEmail?.();
-        }}
-      />
-    );
-  }
-  return <ConfiguredGoogleButton {...props} setup={setup} />;
+  return <ConfiguredGoogleButton {...props} />;
 }
 
-function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail, setup }: Props & { setup: GoogleAuthSetup }) {
+function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail }: Props) {
+  const webClientId = googleClientIds().web;
+  const redirectUri = googleRedirectUri();
   const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: setup.clientId,
-    webClientId: setup.webClientId,
-    iosClientId: setup.iosClientId,
-    androidClientId: setup.androidClientId,
-    redirectUri: setup.redirectUri,
-    responseType: ResponseType.Code,
-    usePKCE: true,
-    shouldAutoExchangeCode: false,
+    clientId: webClientId,
+    webClientId,
+    // Platform client ids would replace the Web client and drop the allow-listed proxy redirect.
+    iosClientId: webClientId,
+    androidClientId: webClientId,
+    redirectUri,
+    // Id token is in the proxy return URL. A code would still need a token exchange
+    // whose redirect_uri is auth.expo.io, which fails when the app only sees exp://.
+    responseType: AuthSession.ResponseType.IdToken,
     scopes: ['openid', 'profile', 'email'],
-    selectAccount: true,
+    // select_account alone skips the password when Chrome is already signed in.
+    extraParams: { prompt: 'login select_account' },
+    shouldAutoExchangeCode: false,
   });
   const onProfileRef = useRef(onProfile);
   const onMessageRef = useRef(onMessage);
@@ -72,51 +69,71 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail, s
   onMessageRef.current = onMessage;
   onNeedEmailRef.current = onNeedEmail;
   const handled = useRef('');
-  const requestRef = useRef(request);
-  requestRef.current = request;
 
-  const fail = () => {
-    onMessageRef.current(GOOGLE_AUTH_FAILED);
-    onNeedEmailRef.current?.();
+  const fail = (err?: unknown) => {
+    const msg = parseGoogleError(err);
+    if (msg) {
+      onMessageRef.current(msg);
+      onNeedEmailRef.current?.();
+    }
   };
 
   const consume = async (result: AuthSessionResult | null) => {
     if (!result || result.type === 'cancel' || result.type === 'dismiss' || result.type === 'opened') return;
     if (result.type !== 'success') {
-      fail();
+      fail(result);
       return;
     }
-    let access = result.authentication?.accessToken || result.params.access_token || '';
-    let idToken = result.authentication?.idToken || result.params.id_token || '';
-    const code = result.params.code || '';
-    const key = code || access || idToken;
-    if (!key || handled.current === key) return;
-    handled.current = key;
-    if (!access && !idToken && code) {
-      const exchanged = await exchangeGoogleCode({
-        clientId: setup.clientId,
-        code,
-        redirectUri: setup.redirectUri,
-        codeVerifier: requestRef.current?.codeVerifier ?? '',
-      });
-      if (!exchanged) {
-        fail();
-        return;
-      }
-      access = exchanged.accessToken;
-      idToken = exchanged.idToken;
+    const access = result.authentication?.accessToken || result.params.access_token || '';
+    const idToken = result.authentication?.idToken || result.params.id_token || '';
+    if (!idToken) {
+      fail('idToken alınamadı. SHA-1 / Web client ID ekle, tekrar dene.');
+      return;
     }
+    const key = `${access}:${idToken}`;
+    if (handled.current === key) return;
+    handled.current = key;
     const profile = await fetchGoogleProfile(access, idToken);
     if (!profile) {
-      fail();
+      fail('profile_fetch_failed');
       return;
     }
-    onProfileRef.current(profile);
+    onProfileRef.current({ ...profile, idToken });
   };
+
+  useEffect(() => {
+    if (__DEV__) console.info('[bu-gece] Google redirectUri', redirectUri);
+  }, [redirectUri]);
 
   useEffect(() => {
     void consume(response);
   }, [response]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const search = new URLSearchParams(window.location.search);
+    const idToken = hash.get('id_token') || search.get('id_token') || '';
+    const access = hash.get('access_token') || search.get('access_token') || '';
+    if (!idToken) {
+      if (access) fail('idToken alınamadı. SHA-1 / Web client ID ekle, tekrar dene.');
+      return;
+    }
+    const state = hash.get('state') || search.get('state') || '';
+    const expected = window.sessionStorage.getItem('bugece.google.state') ?? '';
+    window.history.replaceState({}, '', window.location.pathname);
+    if (expected && state && state !== expected) {
+      fail('state_mismatch');
+      return;
+    }
+    void fetchGoogleProfile(access, idToken).then((profile) => {
+      if (!profile) {
+        fail('profile_fetch_failed');
+        return;
+      }
+      onProfileRef.current({ ...profile, idToken });
+    });
+  }, []);
 
   const press = async () => {
     if (disabled) return;
@@ -126,9 +143,36 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail, s
       return;
     }
     try {
-      await consume(await promptAsync());
-    } catch {
-      fail();
+      if (Platform.OS === 'web') {
+        const authUrl = await request.makeAuthUrlAsync(Google.discovery);
+        const returnUrl = `${window.location.origin}${window.location.pathname}`;
+        window.sessionStorage.setItem('bugece.google.state', request.state ?? '');
+        window.location.assign(
+          `https://auth.expo.io/${expoProxyProject()}/start?${new URLSearchParams({
+            authUrl,
+            returnUrl,
+          }).toString()}`,
+        );
+        return;
+      }
+
+      // Opening Google with redirect_uri=auth.expo.io alone has no returnUrl, so the
+      // proxy shows "Something went wrong trying to finish signing in".
+      const authUrl = await request.makeAuthUrlAsync(Google.discovery);
+      const returnUrl = Linking.createURL('expo-auth-session');
+      const startUrl = `https://auth.expo.io/${expoProxyProject()}/start?${new URLSearchParams({
+        authUrl,
+        returnUrl,
+      }).toString()}`;
+      const browser = await WebBrowser.openAuthSessionAsync(startUrl, returnUrl);
+      if (browser.type !== 'success' || !('url' in browser) || !browser.url) {
+        if (browser.type === 'cancel' || browser.type === 'dismiss') return;
+        fail(browser);
+        return;
+      }
+      await consume(request.parseReturnUrl(browser.url));
+    } catch (err) {
+      fail(err);
     }
   };
 

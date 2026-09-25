@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ProfileBubble, SilhouetteBubble } from '@/components/ProfileBubble';
@@ -7,7 +7,9 @@ import { Starfield } from '@/components/Starfield';
 import { PrimaryButton, Screen } from '@/components/ui';
 import { memberFacingName, MEMBERS, membersWithMood } from '@/data/members';
 import { placeMemberSky, placeMoodNetwork } from '@/data/memberSky';
+import { touchPresence, useLivePresence } from '@/hooks/usePresence';
 import { labelOf, MOODS } from '@/labels';
+import { presenceFacingName, type LivePerson } from '@/lib/presence';
 import { quotaLabel } from '@/lib/quota';
 import { useAppStore } from '@/store/useAppStore';
 import { fontFamily, night } from '@/theme';
@@ -17,6 +19,14 @@ const MATCH_WAIT_SECONDS = 12;
 
 type Segment = 'genel' | 'ruh';
 type Phase = 'ask' | 'search' | 'found';
+type SkyFace = { id: string; label: string };
+
+function facesFromLive(people: LivePerson[], isPro: boolean): SkyFace[] {
+  return people.map((person) => ({
+    id: person.accountId,
+    label: presenceFacingName(person.displayNick, isPro),
+  }));
+}
 
 export default function SohbetlerScreen() {
   const router = useRouter();
@@ -31,15 +41,35 @@ export default function SohbetlerScreen() {
   const [secondsLeft, setSecondsLeft] = useState(MATCH_WAIT_SECONDS);
   const [fieldWidth, setFieldWidth] = useState(0);
   const [netBox, setNetBox] = useState({ width: 0, height: 0 });
+  const livePeople = useLivePresence();
 
+  useFocusEffect(
+    useCallback(() => {
+      touchPresence();
+    }, []),
+  );
+
+  useEffect(() => {
+    if (segment === 'genel') touchPresence();
+  }, [segment]);
+
+  const genelFaces = useMemo<SkyFace[]>(() => {
+    if (livePeople && livePeople.length > 0) return facesFromLive(livePeople, isPro);
+    return MEMBERS.map((member) => ({ id: member.id, label: memberFacingName(member, isPro) }));
+  }, [isPro, livePeople]);
   const sky = useMemo(
-    () => placeMemberSky(MEMBERS.map((member) => member.id), fieldWidth),
-    [fieldWidth],
+    () => placeMemberSky(genelFaces.map((face) => face.id), fieldWidth),
+    [fieldWidth, genelFaces],
   );
-  const matches = useMemo(
-    () => (draftMood ? membersWithMood(draftMood) : []),
-    [draftMood],
-  );
+  const matches = useMemo<SkyFace[]>(() => {
+    if (!draftMood) return [];
+    const sameMood = (livePeople ?? []).filter((person) => person.mood === draftMood);
+    if (sameMood.length > 0) return facesFromLive(sameMood, isPro);
+    return membersWithMood(draftMood).map((member) => ({
+      id: member.id,
+      label: memberFacingName(member, isPro),
+    }));
+  }, [draftMood, isPro, livePeople]);
   const network = useMemo(
     () => placeMoodNetwork(matches.length, netBox.width, netBox.height),
     [matches.length, netBox.width, netBox.height],
@@ -56,7 +86,7 @@ export default function SohbetlerScreen() {
   }, [phase, secondsLeft]);
 
   const openMember = (id: string) => {
-    router.push(`/sohbet/${id}`);
+    router.push(`/sohbet/${encodeURIComponent(id)}`);
   };
 
   const beginSearch = () => {
@@ -79,6 +109,9 @@ export default function SohbetlerScreen() {
         {segment === 'genel' ? (
           <>
             <Text style={styles.quota}>{quotaLabel(remaining, isPro, Boolean(accountId))}</Text>
+            {livePeople && livePeople.length > 0 ? (
+              <Text style={styles.liveCaption}>Canlı · {livePeople.length} kişi</Text>
+            ) : null}
             {!accountId ? (
               <Pressable accessibilityRole="button" onPress={() => router.push('/giris')} style={styles.payStrip}>
                 <Text style={styles.payStripText}>Yazmak için üye girişi</Text>
@@ -103,17 +136,17 @@ export default function SohbetlerScreen() {
                 }}
               >
                 {sky.bubbles.map((bubble) => {
-                  const member = MEMBERS.find((item) => item.id === bubble.id);
-                  if (!member) return null;
+                  const face = genelFaces.find((item) => item.id === bubble.id);
+                  if (!face) return null;
                   return (
                     <ProfileBubble
                       key={bubble.id}
-                      label={memberFacingName(member, isPro)}
+                      label={face.label}
                       glyph={bubble.glyph}
                       diameter={bubble.diameter}
                       left={bubble.left}
                       top={bubble.top}
-                      onPress={() => openMember(member.id)}
+                      onPress={() => openMember(face.id)}
                     />
                   );
                 })}
@@ -184,14 +217,14 @@ export default function SohbetlerScreen() {
                     );
                   })}
                   {network.map((node) => {
-                    const member = matches[node.index];
-                    if (!member) return null;
+                    const face = matches[node.index];
+                    if (!face) return null;
                     return (
                       <Pressable
-                        key={member.id}
+                        key={face.id}
                         accessibilityRole="button"
-                        accessibilityLabel={`${memberFacingName(member, isPro)}, mesaj yaz`}
-                        onPress={() => openMember(member.id)}
+                        accessibilityLabel={`${face.label}, mesaj yaz`}
+                        onPress={() => openMember(face.id)}
                         style={[
                           styles.node,
                           {
@@ -363,6 +396,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     marginTop: 8,
+    fontFamily: fontFamily.sans,
+  },
+  liveCaption: {
+    color: night.muted,
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 2,
+    opacity: 0.8,
     fontFamily: fontFamily.sans,
   },
   payStrip: {

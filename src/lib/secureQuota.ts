@@ -1,4 +1,4 @@
-import { readAccountBook, readSessionAccountId, saveAccountQuota } from '@/lib/accountBook';
+import { loadAccountByUid, readSessionAccountId, saveAccountQuota } from '@/lib/accountBook';
 import { quotaStorageKey, resolveDeviceIdentity } from '@/lib/deviceIdentity';
 import {
   applyServerQuota,
@@ -131,10 +131,9 @@ async function runOnce(): Promise<void> {
 
   const state = useAppStore.getState();
   const sessionId = (await readSessionAccountId()) ?? state.accountId;
-  const book = await readAccountBook();
-  const account = sessionId && book ? book.accounts[sessionId] : undefined;
+  const account = sessionId ? await loadAccountByUid(sessionId) : null;
 
-  if (account && book) {
+  if (account) {
     const sameDevice = deviceQuota?.accountId === account.accountId;
     const sameAsync = state.accountId === account.accountId;
     let snapshot: QuotaSnapshot = {

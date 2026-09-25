@@ -1,5 +1,5 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -7,11 +7,11 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ChatComposer } from '@/components/ChatComposer';
 import { MessageBubble } from '@/components/MessageBubble';
 import { getMember } from '@/data/members';
 import { getRoom } from '@/data/rooms';
@@ -31,7 +31,6 @@ export default function DirectScreen() {
   const stableNick = useAppStore((state) => state.stableNick);
   const thread = useAppStore((state) => (member ? state.directMessages[member.id] : undefined));
   const postDirectMessage = useAppStore((state) => state.postDirectMessage);
-  const [draft, setDraft] = useState('');
 
   const data = useMemo(() => [...(thread ?? [])].reverse(), [thread]);
 
@@ -53,6 +52,8 @@ export default function DirectScreen() {
     return (
       <MessageBubble
         mine={mine}
+        bot={!mine}
+        glyph={room?.mark ?? '✶'}
         gender={mine ? selfGender : member.gender}
         name={mine ? stableNick || 'Sen' : member.stableNick}
         text={item.text}
@@ -61,15 +62,12 @@ export default function DirectScreen() {
     );
   };
 
-  const send = () => {
-    postDirectMessage(member.id, draft);
-    setDraft('');
-  };
+  const send = (text: string) => postDirectMessage(member.id, text);
 
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'android' ? undefined : 'padding'}
     >
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Geri" onPress={() => router.back()}>
@@ -78,6 +76,7 @@ export default function DirectScreen() {
         <View style={styles.headerCopy}>
           <Text style={styles.title}>{member.stableNick}</Text>
           <Text style={styles.subtitle}>Doğrudan mesaj · {room?.name}</Text>
+          <Text style={styles.subtitle}>Sohbetinize bot eşlik ediyor.</Text>
         </View>
       </View>
       {data.length === 0 ? (
@@ -97,28 +96,7 @@ export default function DirectScreen() {
           keyboardShouldPersistTaps="handled"
         />
       )}
-      <View style={[styles.composer, { paddingBottom: 10 }]}>
-        <View style={styles.composerRow}>
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="Doğrudan bir cümle"
-            placeholderTextColor={colors.faint}
-            style={styles.input}
-            maxLength={400}
-            multiline
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Gönder"
-            disabled={!draft.trim()}
-            onPress={send}
-            style={[styles.send, !draft.trim() && styles.sendOff]}
-          >
-            <Text style={styles.sendLabel}>Gönder</Text>
-          </Pressable>
-        </View>
-      </View>
+      <ChatComposer onSend={send} />
     </KeyboardAvoidingView>
   );
 }

@@ -3,10 +3,13 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
+import { RegisteredUsers } from '@/components/RegisteredUsers';
 import { ContactPanel } from '@/components/ContactPanel';
 import { Pill, PrimaryButton, Screen, SecondaryButton } from '@/components/ui';
 import { getRoom } from '@/data/rooms';
 import { writeSessionAccountId } from '@/lib/accountBook';
+import { MATCH_MOODS, matchMoodLabel, type MatchMood } from '@/lib/matchMoods';
+import { leaveMatchQueue, saveMatchMood } from '@/lib/matching';
 import { MOODS, genderLabel, labelOf } from '@/labels';
 import { useAppStore } from '@/store/useAppStore';
 import { colors, fontFamily, night, radius, space } from '@/theme';
@@ -30,8 +33,8 @@ export default function SettingsScreen() {
 
   const confirmReset = () => {
     Alert.alert(
-      'Kimliği sıfırla',
-      'Oda ve simge seçimin silinir. Sohbet geçmişi bu cihazda kalır.',
+      'Oda ve simgeyi sıfırla',
+      'Bu üye hesabını silmez ve çıkış yapmaz. Yalnızca oda ve simge seçimin silinir. Sohbet geçmişi bu cihazda kalır.',
       [
         { text: 'Vazgeç', style: 'cancel' },
         {
@@ -40,6 +43,24 @@ export default function SettingsScreen() {
           onPress: () => {
             resetIdentity();
             router.replace('/onboarding');
+          },
+        },
+      ],
+    );
+  };
+
+  const confirmSignOut = () => {
+    Alert.alert(
+      'Çıkış yap',
+      'Oturum kapanır. Oda, simge ve sohbetlerin bu cihazda kalır. Hesabın silinmez.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Çıkış yap',
+          style: 'destructive',
+          onPress: () => {
+            void writeSessionAccountId(null);
+            signOut();
           },
         },
       ],
@@ -66,6 +87,22 @@ export default function SettingsScreen() {
           <Text style={styles.line}>Odada görünen geçici ad: {tempNick || '—'}</Text>
           <Text style={styles.line}>Pro ile sabit ad: {stableNick || '—'}</Text>
           <Text style={styles.line}>Tempo: {mood ? labelOf(MOODS, mood) : 'Seçilmedi'}</Text>
+          <Text style={styles.line}>Eşleşme ruh hali</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {MATCH_MOODS.map((option) => (
+              <Pressable
+                key={option.value}
+                accessibilityRole="button"
+                onPress={() => {
+                  if (!accountId) return;
+                  void leaveMatchQueue(accountId).then(() => saveMatchMood(accountId, option.value as MatchMood));
+                }}
+              >
+                <Text style={styles.meta}>{option.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.meta}>{accountId ? 'Seçince havuzdaki eski ruh hali silinir.' : matchMoodLabel(null)}</Text>
         </View>
 
         <View style={styles.card}>
@@ -96,37 +133,50 @@ export default function SettingsScreen() {
           <Text style={styles.body}>
             Bu Gece bir ilgi kulübüdür. Felsefe, tarih, edebiyat, astronomi, sanat, müzik, sinema, bilim, psikoloji ve mitoloji odaları konu içindir.
           </Text>
-          <SecondaryButton label="Kimliği sıfırla" onPress={confirmReset} />
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={accountId ? 'Hesabım' : 'Giriş yap'}
-          onPress={() => router.push('/giris')}
-          style={({ pressed }) => [styles.contact, pressed && styles.pressed]}
-        >
-          <View>
-            <Text style={styles.contactLabel}>{accountId ? 'Hesabım' : 'Giriş yap'}</Text>
-            <Text style={styles.meta}>
-              {accountId ? accountName || accountEmail || accountId : 'Üye girişi veya kayıt'}
-            </Text>
-          </View>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-        {accountId ? (
+        <View style={styles.card}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Çıkış yap"
-            onPress={() => {
-              void writeSessionAccountId(null);
-              signOut();
-            }}
-            style={({ pressed }) => [styles.contact, pressed && styles.pressed]}
+            accessibilityLabel={accountId ? 'Hesabım' : 'Giriş yap'}
+            onPress={() => router.push('/giris')}
+            style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}
           >
-            <Text style={styles.contactLabel}>Çıkış yap</Text>
+            <View style={styles.identityCopy}>
+              <Text style={styles.contactLabel}>{accountId ? 'Hesabım' : 'Giriş yap'}</Text>
+              <Text style={styles.meta}>
+                {accountId ? accountName || accountEmail || accountId : 'Üye girişi veya kayıt'}
+              </Text>
+            </View>
             <Text style={styles.chevron}>›</Text>
           </Pressable>
-        ) : null}
+          {accountId ? <RegisteredUsers /> : null}
+          {accountId ? (
+            <>
+              <View style={styles.divider} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Çıkış yap"
+                onPress={confirmSignOut}
+                style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}
+              >
+                <Text style={styles.contactLabel}>Çıkış yap</Text>
+                <Text style={styles.chevron}>›</Text>
+              </Pressable>
+            </>
+          ) : null}
+        </View>
+
+        <View style={styles.card}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Oda ve simgeyi sıfırla"
+            onPress={confirmReset}
+            style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}
+          >
+            <Text style={styles.resetLabel}>Oda ve simgeyi sıfırla</Text>
+          </Pressable>
+        </View>
 
         <Pressable
           accessibilityRole="button"
@@ -201,6 +251,22 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 14,
     lineHeight: 21,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+    gap: 8,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.line,
+  },
+  resetLabel: {
+    color: '#E7A0A8',
+    fontSize: 16,
+    fontWeight: '700',
   },
   contact: {
     flexDirection: 'row',
