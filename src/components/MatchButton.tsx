@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MATCH_MOODS, MATCH_ROUNDS, MATCH_SECONDS, isMatchMood, matchMoodLabel, type MatchMood } from '@/lib/matchMoods';
-import { joinMatchQueue, leaveMatchQueue, listenMatch } from '@/lib/matching';
+import { joinMatchQueue, leaveMatchQueue, listenMatch, saveMatchMood } from '@/lib/matching';
 import { night } from '@/theme';
 
 function clock(seconds: number): string {
@@ -60,6 +60,7 @@ export function MatchButton({ uid }: { uid: string | null }) {
     setPicking(false);
     setRound(1);
     setSeconds(MATCH_SECONDS);
+    await saveMatchMood(uid, next);
     const result = await joinMatchQueue(uid, next);
     if (!result.ok) setNotice(result.message);
   };
@@ -96,24 +97,34 @@ export function MatchButton({ uid }: { uid: string | null }) {
             return;
           }
           if (status === 'matched') return;
-          if (!isMatchMood(mood)) {
-            setPicking(true);
-            return;
-          }
-          void start(mood);
+          // Her zaman ruh hali seçimini aç (kullanıcı o anki ruh halini seçip eşleşsin)
+          setPicking((prev) => !prev);
         }}
         style={styles.button}
       >
         <Text style={styles.buttonLabel}>{status === 'waiting' ? `Eşleşiyor ${clock(seconds)}` : 'Eşleş'}</Text>
       </Pressable>
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-      {picking ? (
-        <View style={styles.moods}>
-          {MATCH_MOODS.map((option) => (
-            <Pressable key={option.value} accessibilityRole="button" onPress={() => { setDraft(option.value); void start(option.value); }} style={[styles.mood, draft === option.value && styles.moodOn]}>
-              <Text style={styles.moodLabel}>{option.label}</Text>
-            </Pressable>
-          ))}
+      {picking && status !== 'waiting' ? (
+        <View style={styles.pickerBox}>
+          <Text style={styles.pickerTitle}>Hangi ruh halindesin?</Text>
+          <View style={styles.moods}>
+            {MATCH_MOODS.map((option) => (
+              <Pressable
+                key={option.value}
+                accessibilityRole="button"
+                onPress={() => {
+                  setDraft(option.value);
+                  void start(option.value);
+                }}
+                style={[styles.mood, (draft === option.value || mood === option.value) && styles.moodOn]}
+              >
+                <Text style={[styles.moodLabel, (draft === option.value || mood === option.value) && styles.moodLabelOn]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       ) : null}
     </View>
@@ -142,7 +153,19 @@ const styles = StyleSheet.create({
   go: { backgroundColor: night.fill, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   goLabel: { color: '#FFFFFF', fontWeight: '700' },
   moods: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
-  mood: { borderWidth: 1, borderColor: night.glassLine, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  moodOn: { backgroundColor: night.fill },
+  pickerBox: {
+    backgroundColor: '#101A26',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(120, 180, 230, 0.3)',
+    padding: 12,
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  pickerTitle: { color: night.muted, fontSize: 13, fontWeight: '600' },
+  mood: { borderWidth: 1, borderColor: night.glassLine, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(255,255,255,0.05)' },
+  moodOn: { backgroundColor: '#3B8CFF', borderColor: '#3B8CFF' },
   moodLabel: { color: night.text, fontSize: 13 },
+  moodLabelOn: { color: '#FFFFFF', fontWeight: '700' },
 });

@@ -19,8 +19,6 @@ import { Starfield } from '@/components/Starfield';
 import { PrimaryButton, Screen } from '@/components/ui';
 import { nudgeAtmospherePlayback } from '@/hooks/useAtmosphere';
 import { registerAccount, signInWithGoogle, signInWithPassword, writeSessionAccountId } from '@/lib/accountBook';
-import { MATCH_MOODS, isMatchMood, type MatchMood } from '@/lib/matchMoods';
-import { saveMatchMood } from '@/lib/matching';
 import { FREE_MESSAGE_QUOTA, quotaLabel } from '@/lib/quota';
 import { bindSignedInAccount } from '@/lib/secureQuota';
 import { useAppStore } from '@/store/useAppStore';
@@ -53,7 +51,6 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [mood, setMood] = useState<MatchMood | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -88,13 +85,9 @@ export default function LoginScreen() {
     setBusy(true);
     setError('');
     try {
-      if (panel === 'kayit' && !isMatchMood(mood)) {
-        setError('Bir ruh hali seç.');
-        return;
-      }
       const result =
         panel === 'kayit'
-          ? await registerAccount(email, password, displayName, mood ?? '')
+          ? await registerAccount(email, password, displayName)
           : await signInWithPassword(email, password);
       await finish(result);
     } finally {
@@ -108,9 +101,6 @@ export default function LoginScreen() {
     setError('');
     try {
       const result = await signInWithGoogle(profile.email, profile.name, profile.idToken);
-      if (result.ok && isMatchMood(mood)) {
-        await saveMatchMood(result.account.accountId, mood);
-      }
       await finish(result);
     } finally {
       setBusy(false);
@@ -244,23 +234,6 @@ export default function LoginScreen() {
             <View style={styles.card}>
               {panel === 'kayit' ? (
                 <>
-                  <Text style={styles.fieldLabel}>Ruh hali</Text>
-                  <View style={styles.moods}>
-                    {MATCH_MOODS.map((option) => {
-                      const selected = mood === option.value;
-                      return (
-                        <Pressable
-                          key={option.value}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected }}
-                          onPress={() => setMood(option.value)}
-                          style={[styles.mood, selected && styles.moodOn]}
-                        >
-                          <Text style={[styles.moodLabel, selected && styles.moodLabelOn]}>{option.label}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
                   <Text style={styles.fieldLabel}>Görünen ad</Text>
                   <TextInput
                     value={displayName}
@@ -297,7 +270,7 @@ export default function LoginScreen() {
               {error ? <Text style={styles.error}>{error}</Text> : null}
               <PrimaryButton
                 label={busy ? 'Bekle…' : panel === 'kayit' ? 'Kayıt ol' : 'Giriş yap'}
-                disabled={busy || (panel === 'kayit' && !mood)}
+                disabled={busy}
                 onPress={() => void submit()}
               />
               <Pressable
@@ -643,30 +616,6 @@ const styles = StyleSheet.create({
   textBtnLabel: {
     color: night.glowBright,
     fontSize: 16,
-    fontWeight: '700',
-  },
-  moods: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  mood: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(120, 180, 230, 0.4)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  moodOn: {
-    backgroundColor: '#3B8CFF',
-    borderColor: '#3B8CFF',
-  },
-  moodLabel: {
-    color: night.text,
-    fontSize: 14,
-  },
-  moodLabelOn: {
-    color: '#FFFFFF',
     fontWeight: '700',
   },
 });

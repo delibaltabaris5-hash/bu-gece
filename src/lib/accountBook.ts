@@ -168,7 +168,7 @@ export async function registerAccount(
 ): Promise<AuthResult> {
   const checked = validateCredentials(emailInput, password);
   if ('ok' in checked) return checked;
-  if (!isMatchMood(moodInput)) return { ok: false, message: 'Bir ruh hali seç.' };
+  const mood = isMatchMood(moodInput) ? moodInput : null;
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: 'Supabase hazır değil.' };
   try {
@@ -185,7 +185,7 @@ export async function registerAccount(
       provider: 'password',
       freeMessagesRemaining: FREE_MESSAGE_QUOTA,
       isPro: false,
-      mood: moodInput,
+      mood,
     };
     await upsertProfile(account);
     await writeSessionAccountId(data.user.id);
