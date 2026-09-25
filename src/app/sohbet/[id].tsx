@@ -18,7 +18,7 @@ import { SilhouetteBubble } from '@/components/ProfileBubble';
 import { PrimaryButton } from '@/components/ui';
 import { getMember, memberFacingName } from '@/data/members';
 import { getRoom } from '@/data/rooms';
-import { replyAsBot } from '@/lib/botService';
+import { BOT_UNAVAILABLE, replyAsBot } from '@/lib/botService';
 import { chatIdFor, newMessageId, subscribeChat, writeChatMessage, type ChatMessageDoc } from '@/lib/chats';
 import { decodeRouteId } from '@/lib/liveDm';
 import { cachedLivePerson, fetchLivePerson, normalizeAccountId, presenceFacingName, type LivePerson } from '@/lib/presence';
@@ -257,6 +257,21 @@ export default function SohbetThreadScreen() {
           text: replyText,
           members: [accountId, peerUid],
         });
+      }).catch(() => {
+        if (!liveThreadId) return;
+        setBotDrafts((current) => [
+          ...current,
+          {
+            id: newMessageId(),
+            chatId: liveThreadId,
+            senderId: 'bot-eslik',
+            senderType: 'bot',
+            text: BOT_UNAVAILABLE,
+            createdAt: Date.now(),
+            type: 'text',
+            status: 'sent',
+          },
+        ]);
       });
       return true;
     }

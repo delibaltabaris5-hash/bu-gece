@@ -99,10 +99,10 @@ function topicLine(history: BotTurn[], current: string): string {
   return clip(blob, 180);
 }
 
-function personaMove(persona: BotPersona, said: string, topic: string): string {
+function personaMove(persona: BotPersona, said: string, topic: string, lang: 'tr' | 'en'): string {
   const line = clip(said, 140);
   const thread = clip(topic, 120);
-  const byId: Record<string, string> = {
+  const tr: Record<string, string> = {
     'bot-felsefe': `“${line}” bir iddia. Karşı savı da koyalım: bunu herkes için doğru sayarsak ne bozulur?`,
     'bot-tarih': `“${line}” bir olay gibi duruyor. Kişi ve dönem olmadan tarih olmaz. Hangi zamana bağlıyorsun?`,
     'bot-edebiyat': `“${line}” cümlesinde yük, son kelimede. Onu bir alıntı gibi okursam anlam kayar. Hangi kelimeyi tutuyorsun?`,
@@ -114,8 +114,25 @@ function personaMove(persona: BotPersona, said: string, topic: string): string {
     'bot-psikoloji': `“${line}” bir duyguya benziyor. Teşhis koymam. Adı ne, onu sen koy.`,
     'bot-mitoloji': `“${line}” hikâye tarafında duruyor. Anlatırım, olmuş gibi satmam. Kim konuşuyor bu cümlede?`,
   };
-  const voice = byId[persona.id] ?? `“${line}” son cümlen. Dağıtmadan ona tutunuyorum.`;
-  if (thread && thread !== line) return `${voice} Az önce de şuradaydık: ${thread}`;
+  const en: Record<string, string> = {
+    'bot-felsefe': `“${line}” is a claim. Counter: if we treat it as true for everyone, what breaks?`,
+    'bot-tarih': `“${line}” looks like an event. No person and period, no history. Which time is it tied to?`,
+    'bot-edebiyat': `In “${line}” the weight is on the last word. Read as a quotation, the meaning shifts. Which word are you keeping?`,
+    'bot-astronomi': `If “${line}” belongs to the sky, it needs a measure. I won't invent distance or time. What did you see?`,
+    'bot-sanat': `For “${line}” I separate what showed up from what it felt like. Those are not the same sentence.`,
+    'bot-muzik': `“${line}” is a feeling. I won't invent a track name. Was it the rhythm or the lyric?`,
+    'bot-sinema': `“${line}” plays like a scene. What does the character do, and what are you saying? I won't invent the film.`,
+    'bot-bilim': `“${line}” is a claim. No evidence, I say I don't know. In one sentence, what are we measuring?`,
+    'bot-psikoloji': `“${line}” sounds like a feeling. I won't diagnose. You name it.`,
+    'bot-mitoloji': `“${line}” sits on the story side. I'll tell it, I won't sell it as fact. Who is speaking?`,
+  };
+  const table = lang === 'en' ? en : tr;
+  const voice = table[persona.id] ?? (lang === 'en'
+    ? `“${line}” is your last line. I stay on it.`
+    : `“${line}” son cümlen. Dağıtmadan ona tutunuyorum.`);
+  if (thread && thread !== line) {
+    return lang === 'en' ? `${voice} We were just here: ${thread}` : `${voice} Az önce de şuradaydık: ${thread}`;
+  }
   return voice;
 }
 
@@ -128,16 +145,16 @@ function localReply(persona: BotPersona, input: BotReplyInput, history: BotTurn[
   const question = lastUserQuestion(history, input.text);
   const lastBot = [...history].reverse().find((turn) => turn.role === 'bot')?.text ?? '';
 
-  const move = personaMove(persona, said, topic);
+  const move = personaMove(persona, said, topic, lang);
   const tr: Record<typeof intent, string> = {
     greet: `${name}, merhaba. Ben ${persona.name}. ${persona.style}. ${move}`,
     insult: `${name}, küfrü duydum, aynısını yazmam. Konuya dönüyorum: ${move}`,
     flirt: `${name}, flört etmem. Masada konu var: ${move}`,
-    complaint: `${name}, “${said}” takılmış. Uygulamayı buradan değiştiremem. Hangi cümle kesti, onu ayıralım.`,
+    complaint: `${name}, “${said}” takılmış. Uygulamayı buradan değiştiremem. Hangi cümle kesti, onu ayıralım. ${move}`,
     detail: question
       ? `${name}, “${question}” sorusunda kalıyorum.\n\n${move}\n\nBunu dışarıdan doğrulayamam. Emin olmadığım yeri uydurmam.`
       : `${name}, “${said}” cümlesini şöyle açıyorum.\n\n${move}\n\nBir ayrıntı daha seçersen oradan devam ederim.`,
-    shift: `${name}, önceki iz şuydu: ${clip(topic, 100)}. Yeni cümleyi sen kur, ben ona tutunurum.`,
+    shift: `${name}, önceki iz şuydu: ${clip(topic, 100)}. Yeni cümle: ${move}`,
     question: /pro|şifre|hesap sil|konum|fiyat/i.test(input.text)
       ? `${name}, hesap, ödeme ve konum bende değil. Onu bilemem.`
       : `${name}, “${said}”\n\n${move}\n\nBunu bakıp doğrulayamam. Bildiğim kadarı bu.`,
@@ -145,14 +162,18 @@ function localReply(persona: BotPersona, input: BotReplyInput, history: BotTurn[
   };
 
   const en: Record<typeof intent, string> = {
-    greet: `${name}, hello. I'm ${persona.name}. What are we talking about?`,
-    insult: `${name}, that was sharp. I won't swear back. The thread was: ${clip(topic, 120)}`,
-    flirt: `${name}, noted. I don't flirt. We can stay on this: ${clip(topic, 120)}`,
-    complaint: `${name}, I heard this complaint: “${said}”. I can't change the app. Which sentence got stuck?`,
-    detail: `${name}, a bit more.\n\nYou said: “${said}”.\nI can't look this up.\nThe thread so far: ${topic}.`,
-    shift: `${name}, topic changed. Previous thread: ${clip(topic, 100)}.`,
-    question: `${name}, you asked: “${said}”. I don't know and I can't look it up.`,
-    chat: `${name}, I heard “${said}”. Thread: ${clip(topic, 140)}.`,
+    greet: `${name}, hello. I'm ${persona.name}. ${persona.style}. ${move}`,
+    insult: `${name}, I heard the insult and I won't match it. Back to the point: ${move}`,
+    flirt: `${name}, I don't flirt. The subject on the table: ${move}`,
+    complaint: `${name}, “${said}” got stuck. I can't change the app from here. Which sentence cut it off? ${move}`,
+    detail: question
+      ? `${name}, I'm staying on “${question}”.\n\n${move}\n\nI can't verify this from outside. I won't invent the part I'm unsure of.`
+      : `${name}, I'll open “${said}” like this.\n\n${move}\n\nPick one more detail and I'll continue from there.`,
+    shift: `${name}, the previous trace was: ${clip(topic, 100)}. New line: ${move}`,
+    question: /pro|password|delete account|location|price/i.test(input.text)
+      ? `${name}, account, payment, and location aren't mine. I can't know that.`
+      : `${name}, “${said}”\n\n${move}\n\nI can't look this up. This is as far as I know.`,
+    chat: `${name}, ${move}`,
   };
 
   let text = (lang === 'en' ? en : tr)[intent];
