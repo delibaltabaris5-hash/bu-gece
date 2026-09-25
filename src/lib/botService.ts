@@ -99,6 +99,26 @@ function topicLine(history: BotTurn[], current: string): string {
   return clip(blob, 180);
 }
 
+function personaMove(persona: BotPersona, said: string, topic: string): string {
+  const line = clip(said, 140);
+  const thread = clip(topic, 120);
+  const byId: Record<string, string> = {
+    'bot-felsefe': `“${line}” bir iddia. Karşı savı da koyalım: bunu herkes için doğru sayarsak ne bozulur?`,
+    'bot-tarih': `“${line}” bir olay gibi duruyor. Kişi ve dönem olmadan tarih olmaz. Hangi zamana bağlıyorsun?`,
+    'bot-edebiyat': `“${line}” cümlesinde yük, son kelimede. Onu bir alıntı gibi okursam anlam kayar. Hangi kelimeyi tutuyorsun?`,
+    'bot-astronomi': `“${line}” gökyüzüne aitse ölçü lazım. Uzaklık ve zamanı uydurmam. Ne gördüğünü söyle.`,
+    'bot-sanat': `“${line}” için önce ne göründüğünü, sonra ne hissettirdiğini ayırırım. İkisi aynı cümle değil.`,
+    'bot-muzik': `“${line}” bir his. Parça adı uydurmam. Ritim mi, söz mü seni tuttu?`,
+    'bot-sinema': `“${line}” bir sahne gibi. Karakter ne yapıyor, sen ne diyorsun? Filmi ben uydurmam.`,
+    'bot-bilim': `“${line}” bir iddia. Kanıtın yoksa bilmiyorum derim. Tek cümleyle neyi ölçüyoruz?`,
+    'bot-psikoloji': `“${line}” bir duyguya benziyor. Teşhis koymam. Adı ne, onu sen koy.`,
+    'bot-mitoloji': `“${line}” hikâye tarafında duruyor. Anlatırım, olmuş gibi satmam. Kim konuşuyor bu cümlede?`,
+  };
+  const voice = byId[persona.id] ?? `“${line}” son cümlen. Dağıtmadan ona tutunuyorum.`;
+  if (thread && thread !== line) return `${voice} Az önce de şuradaydık: ${thread}`;
+  return voice;
+}
+
 function localReply(persona: BotPersona, input: BotReplyInput, history: BotTurn[]): string {
   const lang = languageOf(input.text);
   const intent = intentOf(input.text);
@@ -108,19 +128,20 @@ function localReply(persona: BotPersona, input: BotReplyInput, history: BotTurn[
   const question = lastUserQuestion(history, input.text);
   const lastBot = [...history].reverse().find((turn) => turn.role === 'bot')?.text ?? '';
 
+  const move = personaMove(persona, said, topic);
   const tr: Record<typeof intent, string> = {
-    greet: `${name}, merhaba. Ben ${persona.name}. ${persona.style}. Ne konuşacağız?`,
-    insult: `${name}, sert yazmışsın. Küfürü duydum, üstüne küfretmem. Döndüğümüz yer: ${clip(topic, 120)}`,
-    flirt: `${name}, bunu duydum. Ben flört botu değilim; masada konu konuşurum. İstersen şuna dönelim: ${clip(topic, 120)}`,
-    complaint: `${name}, şikâyeti şöyle aldım: “${said}”. Bunu uygulama içinde düzeltemem. Konuşarak netleştirebiliriz: tam olarak hangi cümle takıldı?`,
+    greet: `${name}, merhaba. Ben ${persona.name}. ${persona.style}. ${move}`,
+    insult: `${name}, küfrü duydum, aynısını yazmam. Konuya dönüyorum: ${move}`,
+    flirt: `${name}, flört etmem. Masada konu var: ${move}`,
+    complaint: `${name}, “${said}” takılmış. Uygulamayı buradan değiştiremem. Hangi cümle kesti, onu ayıralım.`,
     detail: question
-      ? `${name}, son soru şuydu: “${question}”.\n\nBildiğim kadar: bunu doğrulayamam, bakamam.\nKonunun izi: ${topic}.\n${persona.style} olarak bir açı: iddiayı tek cümleye indir, sonra karşı örneği söyle.`
-      : `${name}, biraz açayım.\n\nSöylediğin: “${said}”.\nBunu üç parçaya bölerim: ne olduğu, neden önemli olduğu, nerede durduğumuz.\nUydurmam. Emin olmadığım yerde bilmiyorum derim.`,
-    shift: `${name}, konuyu değiştirdik. Bir önceki iz şuydu: ${clip(topic, 100)}. Yeni cümleyi sen kur.`,
+      ? `${name}, “${question}” sorusunda kalıyorum.\n\n${move}\n\nBunu dışarıdan doğrulayamam. Emin olmadığım yeri uydurmam.`
+      : `${name}, “${said}” cümlesini şöyle açıyorum.\n\n${move}\n\nBir ayrıntı daha seçersen oradan devam ederim.`,
+    shift: `${name}, önceki iz şuydu: ${clip(topic, 100)}. Yeni cümleyi sen kur, ben ona tutunurum.`,
     question: /pro|şifre|hesap sil|konum|fiyat/i.test(input.text)
-      ? `${name}, bunu bilmiyorum ve bakamam. Hesap, ödeme ve konum bende değil.`
-      : `${name}, sorduğun şu: “${said}”. Bunu dışarıdan doğrulayamam. ${persona.name} olarak elimdeki iz: ${clip(topic, 140)}. Emin olmadığım kısmı uydurmam.`,
-    chat: `${name}, “${said}” cümlesini aldım. ${persona.style}. Bunu son konuştuğumuz yere bağlıyorum: ${clip(topic, 140)}.`,
+      ? `${name}, hesap, ödeme ve konum bende değil. Onu bilemem.`
+      : `${name}, “${said}”\n\n${move}\n\nBunu bakıp doğrulayamam. Bildiğim kadarı bu.`,
+    chat: `${name}, ${move}`,
   };
 
   const en: Record<typeof intent, string> = {

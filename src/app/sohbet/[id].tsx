@@ -18,6 +18,7 @@ import { SilhouetteBubble } from '@/components/ProfileBubble';
 import { PrimaryButton } from '@/components/ui';
 import { getMember, memberFacingName } from '@/data/members';
 import { getRoom } from '@/data/rooms';
+import { replyAsBot } from '@/lib/botService';
 import { chatIdFor, newMessageId, subscribeChat, writeChatMessage, type ChatMessageDoc } from '@/lib/chats';
 import { decodeRouteId } from '@/lib/liveDm';
 import { cachedLivePerson, fetchLivePerson, normalizeAccountId, presenceFacingName, type LivePerson } from '@/lib/presence';
@@ -44,6 +45,7 @@ export default function SohbetThreadScreen() {
   const [live, setLive] = useState<LivePerson | null>(null);
   const [resolvedFor, setResolvedFor] = useState<string | undefined>(seed ? memberId : undefined);
   const [liveMessages, setLiveMessages] = useState<ChatMessageDoc[]>([]);
+  const [botDrafts, setBotDrafts] = useState<ChatMessageDoc[]>([]);
   const [failed, setFailed] = useState<ChatMessageDoc[]>([]);
   const [sendError, setSendError] = useState('');
 
@@ -98,7 +100,15 @@ export default function SohbetThreadScreen() {
       status: message.status,
     }));
     const pending = failed.filter((message) => !liveMessages.some((item) => item.id === message.id));
-    return [...remote, ...pending.map((message) => ({
+    const drafts = botDrafts.filter((message) => !liveMessages.some((item) => item.id === message.id));
+    return [...remote, ...drafts.map((message) => ({
+      id: message.id,
+      memberId: peerUid,
+      from: 'bot' as const,
+      text: message.text,
+      createdAt: message.createdAt,
+      status: 'sent' as const,
+    })), ...pending.map((message) => ({
       id: message.id,
       memberId: peerUid,
       from: 'self' as const,
@@ -106,7 +116,7 @@ export default function SohbetThreadScreen() {
       createdAt: message.createdAt,
       status: 'failed' as const,
     }))].reverse();
-  }, [accountId, failed, liveMessages, liveThreadId, peerUid, thread]);
+  }, [accountId, botDrafts, failed, liveMessages, liveThreadId, peerUid, thread]);
   const face = seed
     ? {
         id: seed.id,
@@ -215,6 +225,39 @@ export default function SohbetThreadScreen() {
         return false;
       }
       spendMessageCredit();
+      const history = [...liveMessages, ...botDrafts].slice(-24).map((message) => ({
+        role: message.senderType === 'bot' ? ('bot' as const) : ('user' as const),
+        text: message.text,
+      }));
+      void replyAsBot({
+        botId: 'bot-eslik',
+        userId: accountId,
+        userName: selfName,
+        history,
+        text,
+      }).then((replyText) => {
+        if (!replyText || !liveThreadId) return;
+        const messageId = newMessageId();
+        const draft: ChatMessageDoc = {
+          id: messageId,
+          chatId: liveThreadId,
+          senderId: 'bot-eslik',
+          senderType: 'bot',
+          text: replyText,
+          createdAt: Date.now(),
+          type: 'text',
+          status: 'sent',
+        };
+        setBotDrafts((current) => [...current, draft]);
+        return writeChatMessage({
+          chatId: liveThreadId,
+          messageId,
+          senderId: 'bot-eslik',
+          senderType: 'bot',
+          text: replyText,
+          members: [accountId, peerUid],
+        });
+      });
       return true;
     }
     return postDirectMessage(face.id, text);
