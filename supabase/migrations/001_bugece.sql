@@ -63,6 +63,23 @@ alter table public.messages enable row level security;
 alter table public.match_queue enable row level security;
 alter table public.matches enable row level security;
 
+-- Helper security definer function to avoid recursive RLS checks
+create or replace function public.is_chat_member(p_chat_id text, p_user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.chat_members
+    where chat_id = p_chat_id and user_id = p_user_id
+  );
+$$;
+
+revoke all on function public.is_chat_member(text, uuid) from public;
+grant execute on function public.is_chat_member(text, uuid) to authenticated;
+
 create policy profiles_read on public.profiles for select to authenticated using (true);
 create policy profiles_insert on public.profiles for insert to authenticated with check (id = auth.uid());
 create policy profiles_update on public.profiles for update to authenticated
@@ -75,30 +92,21 @@ create policy profiles_update on public.profiles for update to authenticated
   );
 
 create policy chats_read on public.chats for select to authenticated
-  using (exists (select 1 from public.chat_members m where m.chat_id = id and m.user_id = auth.uid()));
+  using (public.is_chat_member(id, auth.uid()));
 create policy chats_write on public.chats for insert to authenticated with check (true);
 create policy chats_update on public.chats for update to authenticated
-  using (exists (select 1 from public.chat_members m where m.chat_id = id and m.user_id = auth.uid()));
+  using (public.is_chat_member(id, auth.uid()));
 
 create policy members_read on public.chat_members for select to authenticated
-  using (
-    user_id = auth.uid()
-    or exists (select 1 from public.chat_members m where m.chat_id = chat_id and m.user_id = auth.uid())
-  );
+  using (user_id = auth.uid() or public.is_chat_member(chat_id, auth.uid()));
 create policy members_write on public.chat_members for insert to authenticated
-  with check (
-    user_id = auth.uid()
-    or exists (
-      select 1 from public.chat_members m
-      where m.chat_id = chat_members.chat_id and m.user_id = auth.uid()
-    )
-  );
+  with check (user_id = auth.uid() or public.is_chat_member(chat_id, auth.uid()));
 
 create policy messages_read on public.messages for select to authenticated
-  using (exists (select 1 from public.chat_members m where m.chat_id = messages.chat_id and m.user_id = auth.uid()));
+  using (public.is_chat_member(chat_id, auth.uid()));
 create policy messages_insert on public.messages for insert to authenticated
   with check (
-    exists (select 1 from public.chat_members m where m.chat_id = messages.chat_id and m.user_id = auth.uid())
+    public.is_chat_member(chat_id, auth.uid())
     and (
       (sender_type = 'user' and sender_id = auth.uid()::text)
       or (sender_type = 'bot' and sender_id like 'bot-%')
