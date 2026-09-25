@@ -15,6 +15,7 @@ import {
   googleConfigMessage,
   googleRedirectUri,
   isGoogleAuthConfigured,
+  parseGoogleError,
 } from '@/lib/googleAuth';
 import { fontFamily } from '@/theme';
 
@@ -69,21 +70,24 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail }:
   onNeedEmailRef.current = onNeedEmail;
   const handled = useRef('');
 
-  const fail = () => {
-    onMessageRef.current(GOOGLE_AUTH_FAILED);
-    onNeedEmailRef.current?.();
+  const fail = (err?: unknown) => {
+    const msg = parseGoogleError(err);
+    if (msg) {
+      onMessageRef.current(msg);
+      onNeedEmailRef.current?.();
+    }
   };
 
   const consume = async (result: AuthSessionResult | null) => {
     if (!result || result.type === 'cancel' || result.type === 'dismiss' || result.type === 'opened') return;
     if (result.type !== 'success') {
-      fail();
+      fail(result);
       return;
     }
     const access = result.authentication?.accessToken || result.params.access_token || '';
     const idToken = result.authentication?.idToken || result.params.id_token || '';
     if (!access && !idToken) {
-      fail();
+      fail('no_token');
       return;
     }
     const key = `${access}:${idToken}`;
@@ -91,7 +95,7 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail }:
     handled.current = key;
     const profile = await fetchGoogleProfile(access, idToken);
     if (!profile) {
-      fail();
+      fail('profile_fetch_failed');
       return;
     }
     onProfileRef.current({ ...profile, idToken });
@@ -116,12 +120,12 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail }:
     const expected = window.sessionStorage.getItem('bugece.google.state') ?? '';
     window.history.replaceState({}, '', window.location.pathname);
     if (expected && state && state !== expected) {
-      fail();
+      fail('state_mismatch');
       return;
     }
     void fetchGoogleProfile(access, idToken).then((profile) => {
       if (!profile) {
-        fail();
+        fail('profile_fetch_failed');
         return;
       }
       onProfileRef.current({ ...profile, idToken });
@@ -160,12 +164,12 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail }:
       const browser = await WebBrowser.openAuthSessionAsync(startUrl, returnUrl);
       if (browser.type !== 'success' || !('url' in browser) || !browser.url) {
         if (browser.type === 'cancel' || browser.type === 'dismiss') return;
-        fail();
+        fail(browser);
         return;
       }
       await consume(request.parseReturnUrl(browser.url));
-    } catch {
-      fail();
+    } catch (err) {
+      fail(err);
     }
   };
 

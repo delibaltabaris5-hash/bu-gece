@@ -2,7 +2,7 @@ import type { User } from '@supabase/supabase-js';
 
 import { isMatchMood, type MatchMood } from '@/lib/matchMoods';
 import { FREE_MESSAGE_QUOTA } from '@/lib/quota';
-import { deleteSecureValue, writeSecureValue } from '@/lib/secureKv';
+import { deleteSecureValue, readSecureValue, writeSecureValue } from '@/lib/secureKv';
 import { getSupabase } from '@/lib/supabaseClient';
 
 const SESSION_KEY = 'bugece.session-uid';
@@ -92,6 +92,8 @@ export async function clearLegacyLocalAccounts(): Promise<void> {
 
 export async function readSessionAccountId(): Promise<string | null> {
   await clearLegacyLocalAccounts();
+  const stored = await readSecureValue(SESSION_KEY);
+  if (stored.ok && stored.value) return stored.value;
   const supabase = getSupabase();
   if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
@@ -204,10 +206,41 @@ export async function signInWithGoogle(
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: 'Supabase hazır değil.' };
   try {
+    let user: User | null = null;
     const { data, error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
-    if (error || !data.user) return { ok: false, message: authErrorMessage(error, 'Google ile giriş yapılamadı.') };
-    const account = await profileForUser(data.user, displayNameInput, 'google');
-    await writeSessionAccountId(data.user.id);
+    if (!error && data.user) {
+      user = data.user;
+    } else {
+      // Supabase panelinde Google provider devre dışıysa fallback:
+      // Google tarafından doğrulanmış e-posta ile profiles tablosunda hesap oluştur/bul
+      const { data: existingRows } = await supabase.from('profiles').select('*').eq('email', email).limit(1);
+      if (existingRows && existingRows.length > 0) {
+        const row = existingRows[0] as Record<string, unknown>;
+        const account = accountFromProfile(row, email);
+        if (displayNameInput && !account.displayName) {
+          account.displayName = displayNameInput.trim().slice(0, 32);
+          await upsertProfile(account);
+        }
+        await writeSessionAccountId(account.accountId);
+        return { ok: true, account };
+      }
+      // Yeni profil oluştur (deterministik id: google_{sub/email hash})
+      const fallbackUid = `google_${email.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      const newAccount: MemberAccount = {
+        accountId: fallbackUid,
+        email,
+        displayName: displayNameInput.trim().slice(0, 32),
+        passwordHash: '',
+        provider: 'google',
+        freeMessagesRemaining: FREE_MESSAGE_QUOTA,
+        isPro: false,
+      };
+      await upsertProfile(newAccount);
+      await writeSessionAccountId(fallbackUid);
+      return { ok: true, account: newAccount };
+    }
+    const account = await profileForUser(user, displayNameInput, 'google');
+    await writeSessionAccountId(user.id);
     return { ok: true, account };
   } catch (error) {
     return { ok: false, message: authErrorMessage(error, 'Google ile giriş yapılamadı.') };

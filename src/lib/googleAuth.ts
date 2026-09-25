@@ -101,6 +101,27 @@ export function googleConfigMessage(): string {
   return 'Gmail girişi için EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID gerekli. E-posta ile kayıt olabilirsin.';
 }
 
+export function parseGoogleError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  const lower = message.toLowerCase();
+  if (lower.includes('10:') || lower.includes('developer_error') || lower.includes('api_exception: 10')) {
+    return 'Google Play Services / SHA-1 veya paket adı uyuşmazlığı (Hata 10).';
+  }
+  if (lower.includes('12500') || lower.includes('sign_in_failed')) {
+    return 'Google Giriş yapılandırma hatası (Hata 12500). OAuth Client ID kontrol edilmeli.';
+  }
+  if (lower.includes('12501') || lower.includes('sign_in_cancelled')) {
+    return ''; // Kullanıcı iptal etti, sessiz dön
+  }
+  if (lower.includes('network') || lower.includes('timeout')) {
+    return 'İnternet bağlantısı hatası. Lütfen bağlantını kontrol et.';
+  }
+  if (lower.includes('account-exists-with-different-credential')) {
+    return 'Bu e-posta başka bir yöntemle kayıtlı. Lütfen şifre ile giriş yap.';
+  }
+  return GOOGLE_AUTH_FAILED;
+}
+
 export const GOOGLE_AUTH_FAILED =
   'Google girişi tamamlanamadı. E-posta ile kayıt olabilirsin.';
 

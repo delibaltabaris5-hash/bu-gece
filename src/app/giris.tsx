@@ -107,12 +107,8 @@ export default function LoginScreen() {
     setBusy(true);
     setError('');
     try {
-      if (panel === 'kayit' && !isMatchMood(mood)) {
-        setError('Bir ruh hali seç.');
-        return;
-      }
       const result = await signInWithGoogle(profile.email, profile.name, profile.idToken);
-      if (result.ok && panel === 'kayit' && isMatchMood(mood)) {
+      if (result.ok && isMatchMood(mood)) {
         await saveMatchMood(result.account.accountId, mood);
       }
       await finish(result);
@@ -215,6 +211,11 @@ export default function LoginScreen() {
               </Text>
             </Text>
             {error ? <Text style={styles.error}>{error}</Text> : null}
+            {busy ? (
+              <Text style={[styles.fine, { color: night.glowBright, marginTop: 8 }]}>
+                Giriş yapılıyor, lütfen bekleyin...
+              </Text>
+            ) : null}
           </View>
           <AtmosphereSlider />
         </View>
