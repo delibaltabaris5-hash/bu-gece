@@ -86,8 +86,8 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail }:
     }
     const access = result.authentication?.accessToken || result.params.access_token || '';
     const idToken = result.authentication?.idToken || result.params.id_token || '';
-    if (!access && !idToken) {
-      fail('no_token');
+    if (!idToken) {
+      fail('idToken alınamadı. SHA-1 / Web client ID ekle, tekrar dene.');
       return;
     }
     const key = `${access}:${idToken}`;
@@ -115,7 +115,10 @@ function ConfiguredGoogleButton({ disabled, onProfile, onMessage, onNeedEmail }:
     const search = new URLSearchParams(window.location.search);
     const idToken = hash.get('id_token') || search.get('id_token') || '';
     const access = hash.get('access_token') || search.get('access_token') || '';
-    if (!idToken && !access) return;
+    if (!idToken) {
+      if (access) fail('idToken alınamadı. SHA-1 / Web client ID ekle, tekrar dene.');
+      return;
+    }
     const state = hash.get('state') || search.get('state') || '';
     const expected = window.sessionStorage.getItem('bugece.google.state') ?? '';
     window.history.replaceState({}, '', window.location.pathname);
