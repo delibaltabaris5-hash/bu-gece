@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MATCH_MOODS, MATCH_ROUNDS, MATCH_SECONDS, isMatchMood, matchMoodLabel, type MatchMood } from '@/lib/matchMoods';
-import { joinMatchQueue, leaveMatchQueue, listenMatch, saveMatchMood } from '@/lib/matching';
+import { joinMatchQueue, leaveMatchQueue, listenMatch, saveMatchMood, tryPair } from '@/lib/matching';
 import { night } from '@/theme';
 
 function clock(seconds: number): string {
@@ -47,8 +47,9 @@ export function MatchButton({ uid }: { uid: string | null }) {
       return;
     }
     const timer = setTimeout(() => setSeconds((value) => value - 1), 1000);
+    if (uid && mood && seconds % 3 === 0) void tryPair(uid, mood);
     return () => clearTimeout(timer);
-  }, [round, seconds, status, uid]);
+  }, [mood, round, seconds, status, uid]);
 
   const start = async (next: MatchMood) => {
     if (!uid) {

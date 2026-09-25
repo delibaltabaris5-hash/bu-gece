@@ -1,6 +1,16 @@
-import type { User } from '@supabase/supabase-js';
-import { GoogleAuthProvider, getAuth, onAuthStateChanged, signInWithCredential, signOut as firebaseSignOut, type Auth, type User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import {
+  GoogleAuthProvider,
+  createUserWithEmailAndPassword,
+  getAuth,
+  onAuthStateChanged,
+  signInWithCredential,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  updateProfile,
+  type Auth,
+  type User as FirebaseUser,
+} from 'firebase/auth';
+import { collection, doc, getDoc, getDocs, limit, query, setDoc } from 'firebase/firestore';
 
 import { getFirebaseApp, getPresenceDb } from '@/lib/firebaseApp';
 import { isMatchMood, type MatchMood } from '@/lib/matchMoods';
@@ -39,53 +49,40 @@ export function normalizeEmail(value: string): string | null {
 }
 
 function authErrorMessage(error: unknown, fallback: string): string {
+  const code = typeof error === 'object' && error && 'code' in error ? String((error as { code: string }).code) : '';
+  if (code === 'auth/email-already-in-use') return 'Bu e-posta zaten kayıtlı. Giriş yap.';
+  if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found' || code === 'auth/invalid-login-credentials') {
+    return 'E-posta veya şifre uyuşmadı.';
+  }
+  if (code === 'auth/network-request-failed') return 'İnternet bağlantısı yok.';
+  if (code === 'auth/weak-password' || code === 'auth/missing-password') return 'Şifre en az 6 karakter olsun.';
+  if (code === 'auth/invalid-email') return 'Geçerli bir e-posta yaz.';
   const message = error instanceof Error ? error.message : '';
   const lower = message.toLowerCase();
   if (lower.includes('already') || lower.includes('registered')) return 'Bu e-posta zaten kayıtlı. Giriş yap.';
   if (lower.includes('invalid login') || lower.includes('invalid credentials')) return 'E-posta veya şifre uyuşmadı.';
-  if (lower.includes('email')) return 'Geçerli bir e-posta yaz.';
-  if (lower.includes('password')) return 'Şifre en az 6 karakter olsun.';
-  if (!getSupabase()) return 'Supabase hazır değil.';
   return fallback;
 }
 
-function accountFromProfile(row: Record<string, unknown>, emailFallback: string): MemberAccount {
+function accountFromUserDoc(uid: string, row: Record<string, unknown>): MemberAccount {
   const mood = typeof row.mood === 'string' && isMatchMood(row.mood) ? row.mood : null;
   return {
-    accountId: String(row.id ?? ''),
-    email: typeof row.email === 'string' ? row.email : emailFallback,
+    accountId: uid,
+    email: typeof row.email === 'string' ? row.email : '',
     displayName: typeof row.name === 'string' ? row.name : '',
     passwordHash: '',
     provider: row.provider === 'google' ? 'google' : 'password',
-    freeMessagesRemaining: typeof row.free_messages_remaining === 'number' ? row.free_messages_remaining : FREE_MESSAGE_QUOTA,
-    isPro: row.is_pro === true,
+    freeMessagesRemaining: typeof row.freeMessagesRemaining === 'number' ? row.freeMessagesRemaining : FREE_MESSAGE_QUOTA,
+    isPro: row.isPro === true,
     mood,
   };
 }
 
-async function upsertProfile(account: MemberAccount): Promise<void> {
-  const supabase = getSupabase();
-  if (!supabase) throw new Error('Supabase hazır değil.');
-  const { error } = await supabase.from('profiles').upsert({
-    id: account.accountId,
-    email: account.email,
-    name: account.displayName,
-    mood: account.mood ?? null,
-    mood_updated_at: account.mood ? new Date().toISOString() : null,
-    free_messages_remaining: account.freeMessagesRemaining,
-    is_pro: account.isPro,
-    provider: account.provider ?? 'password',
-    match_status: 'idle',
-  });
-  if (error) throw error;
-}
-
 export async function listRegisteredUsers(): Promise<MemberAccount[]> {
-  const supabase = getSupabase();
-  if (!supabase) return [];
-  const { data, error } = await supabase.from('profiles').select('*').order('email');
-  if (error || !data) return [];
-  return data.map((row) => accountFromProfile(row as Record<string, unknown>, ''));
+  const db = getPresenceDb();
+  if (!db) return [];
+  const snap = await getDocs(query(collection(db, 'users'), limit(40)));
+  return snap.docs.map((item) => accountFromUserDoc(item.id, item.data() as Record<string, unknown>));
 }
 
 export async function clearLegacyLocalAccounts(): Promise<void> {
@@ -139,26 +136,11 @@ export async function writeSessionAccountId(accountId: string | null): Promise<v
 
 export async function loadAccountByUid(uid: string): Promise<MemberAccount | null> {
   if (!uid) return null;
-  const supabase = getSupabase();
-  if (supabase) {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
-    if (!error && data) return accountFromProfile(data as Record<string, unknown>, '');
-  }
   const db = getPresenceDb();
   if (!db) return null;
   const snap = await getDoc(doc(db, 'users', uid));
   if (!snap.exists()) return null;
-  const row = snap.data() as Record<string, unknown>;
-  return {
-    accountId: uid,
-    email: typeof row.email === 'string' ? row.email : '',
-    displayName: typeof row.name === 'string' ? row.name : '',
-    passwordHash: '',
-    provider: row.provider === 'google' ? 'google' : 'password',
-    freeMessagesRemaining: typeof row.freeMessagesRemaining === 'number' ? row.freeMessagesRemaining : FREE_MESSAGE_QUOTA,
-    isPro: row.isPro === true,
-    mood: typeof row.mood === 'string' && isMatchMood(row.mood) ? row.mood : null,
-  };
+  return accountFromUserDoc(uid, snap.data() as Record<string, unknown>);
 }
 
 function validateCredentials(emailInput: string, password: string): { email: string } | AuthResult {
@@ -168,39 +150,33 @@ function validateCredentials(emailInput: string, password: string): { email: str
   return { email };
 }
 
-async function profileForUser(user: User, displayName: string, provider: 'password' | 'google'): Promise<MemberAccount> {
-  const existing = await loadAccountByUid(user.id);
-  if (existing) return existing;
-  const account: MemberAccount = {
-    accountId: user.id,
-    email: user.email ?? '',
-    displayName: displayName.trim().slice(0, 32),
-    passwordHash: '',
-    provider,
-    freeMessagesRemaining: FREE_MESSAGE_QUOTA,
-    isPro: false,
-  };
-  await upsertProfile(account);
-  return account;
+async function touchLogin(user: FirebaseUser): Promise<MemberAccount> {
+  const db = getPresenceDb();
+  if (!db) throw new Error('Veritabanı hazır değil.');
+  const ref = doc(db, 'users', user.uid);
+  const existing = await getDoc(ref);
+  if (!existing.exists()) throw new Error('Profil bulunamadı.');
+  const previous = existing.data() as Record<string, unknown>;
+  await setDoc(ref, { uid: user.uid, lastLoginAt: Date.now() }, { merge: true });
+  return accountFromUserDoc(user.uid, { ...previous, lastLoginAt: Date.now() });
 }
 
 export async function signInWithPassword(emailInput: string, password: string): Promise<AuthResult> {
   const checked = validateCredentials(emailInput, password);
   if ('ok' in checked) return checked;
-  const supabase = getSupabase();
-  if (!supabase) return { ok: false, message: 'Supabase hazır değil.' };
+  const auth = firebaseAuth();
+  if (!auth) return { ok: false, message: 'Firebase hazır değil.' };
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email: checked.email, password });
-    if (error || !data.user) return { ok: false, message: authErrorMessage(error, 'Giriş yapılamadı. Tekrar dene.') };
-    const account = await profileForUser(data.user, '', 'password');
-    await writeSessionAccountId(data.user.id);
+    const cred = await signInWithEmailAndPassword(auth, checked.email, password);
+    const account = await touchLogin(cred.user);
+    await writeSessionAccountId(cred.user.uid);
     return { ok: true, account };
   } catch (error) {
     return { ok: false, message: authErrorMessage(error, 'Giriş yapılamadı. Tekrar dene.') };
   }
 }
 
-/** Creates the auth user and the profile row together. */
+/** Creates the auth user and users/{uid} together. Mood is required. Does not overwrite an existing email. */
 export async function registerAccount(
   emailInput: string,
   password: string,
@@ -209,27 +185,33 @@ export async function registerAccount(
 ): Promise<AuthResult> {
   const checked = validateCredentials(emailInput, password);
   if ('ok' in checked) return checked;
-  const mood = isMatchMood(moodInput) ? moodInput : null;
-  const supabase = getSupabase();
-  if (!supabase) return { ok: false, message: 'Supabase hazır değil.' };
+  if (!isMatchMood(moodInput)) return { ok: false, message: 'Bir ruh hali seç.' };
+  const auth = firebaseAuth();
+  const db = getPresenceDb();
+  if (!auth || !db) return { ok: false, message: 'Firebase hazır değil.' };
   try {
-    const { data, error } = await supabase.auth.signUp({ email: checked.email, password });
-    if (error || !data.user) return { ok: false, message: authErrorMessage(error, 'Hesap kaydedilemedi. Tekrar dene.') };
-    if (!data.session) {
-      return { ok: false, message: 'Supabase e-posta onayı açık. Onayı kapatıp tekrar dene.' };
-    }
-    const account: MemberAccount = {
-      accountId: data.user.id,
+    const cred = await createUserWithEmailAndPassword(auth, checked.email, password);
+    const name = displayNameInput.trim().slice(0, 32) || checked.email.split('@')[0]?.slice(0, 32) || 'Gece';
+    if (displayNameInput.trim()) await updateProfile(cred.user, { displayName: name }).catch(() => undefined);
+    const now = Date.now();
+    await setDoc(doc(db, 'users', cred.user.uid), {
+      uid: cred.user.uid,
       email: checked.email,
-      displayName: displayNameInput.trim().slice(0, 32),
-      passwordHash: '',
+      name,
+      photoUrl: '',
       provider: 'password',
+      mood: moodInput,
+      moodUpdatedAt: now,
+      createdAt: now,
+      lastLoginAt: now,
+      matchStatus: 'idle',
       freeMessagesRemaining: FREE_MESSAGE_QUOTA,
       isPro: false,
-      mood,
-    };
-    await upsertProfile(account);
-    await writeSessionAccountId(data.user.id);
+    });
+    const saved = await getDoc(doc(db, 'users', cred.user.uid));
+    if (!saved.exists()) throw new Error('Profil yazılamadı.');
+    const account = accountFromUserDoc(cred.user.uid, saved.data() as Record<string, unknown>);
+    await writeSessionAccountId(cred.user.uid);
     return { ok: true, account };
   } catch (error) {
     return { ok: false, message: authErrorMessage(error, 'Hesap kaydedilemedi. Tekrar dene.') };
@@ -254,6 +236,10 @@ async function writeGoogleUser(user: FirebaseUser, displayNameInput: string): Pr
       provider: 'google',
       lastLoginAt: now,
       createdAt: typeof previous?.createdAt === 'number' ? previous.createdAt : now,
+      ...(typeof previous?.mood === 'string' && isMatchMood(previous.mood)
+        ? { mood: previous.mood, moodUpdatedAt: typeof previous.moodUpdatedAt === 'number' ? previous.moodUpdatedAt : now }
+        : {}),
+      matchStatus: previous?.matchStatus === 'waiting' || previous?.matchStatus === 'matched' ? previous.matchStatus : 'idle',
       freeMessagesRemaining:
         typeof previous?.freeMessagesRemaining === 'number' ? previous.freeMessagesRemaining : FREE_MESSAGE_QUOTA,
       isPro: previous?.isPro === true,
@@ -271,6 +257,7 @@ async function writeGoogleUser(user: FirebaseUser, displayNameInput: string): Pr
     provider: 'google',
     freeMessagesRemaining: typeof row.freeMessagesRemaining === 'number' ? row.freeMessagesRemaining : FREE_MESSAGE_QUOTA,
     isPro: row.isPro === true,
+    mood: typeof row.mood === 'string' && isMatchMood(row.mood) ? row.mood : null,
   };
 }
 
@@ -306,10 +293,11 @@ export async function saveAccountQuota(
   accountId: string,
   quota: { freeMessagesRemaining: number; isPro: boolean },
 ): Promise<void> {
-  const supabase = getSupabase();
-  if (!supabase || !accountId) return;
-  await supabase
-    .from('profiles')
-    .update({ free_messages_remaining: quota.freeMessagesRemaining, is_pro: quota.isPro })
-    .eq('id', accountId);
+  const db = getPresenceDb();
+  if (!db || !accountId) return;
+  await setDoc(
+    doc(db, 'users', accountId),
+    { uid: accountId, freeMessagesRemaining: quota.freeMessagesRemaining, isPro: quota.isPro },
+    { merge: true },
+  );
 }

@@ -19,6 +19,7 @@ import { Starfield } from '@/components/Starfield';
 import { PrimaryButton, Screen } from '@/components/ui';
 import { nudgeAtmospherePlayback } from '@/hooks/useAtmosphere';
 import { registerAccount, signInWithGoogle, signInWithPassword, writeSessionAccountId } from '@/lib/accountBook';
+import { MATCH_MOODS, isMatchMood, type MatchMood } from '@/lib/matchMoods';
 import { FREE_MESSAGE_QUOTA, quotaLabel } from '@/lib/quota';
 import { bindSignedInAccount } from '@/lib/secureQuota';
 import { useAppStore } from '@/store/useAppStore';
@@ -51,6 +52,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [mood, setMood] = useState<MatchMood | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -85,9 +87,13 @@ export default function LoginScreen() {
     setBusy(true);
     setError('');
     try {
+      if (panel === 'kayit' && !isMatchMood(mood)) {
+        setError('Bir ruh hali seç.');
+        return;
+      }
       const result =
         panel === 'kayit'
-          ? await registerAccount(email, password, displayName)
+          ? await registerAccount(email, password, displayName, mood ?? '')
           : await signInWithPassword(email, password);
       await finish(result);
     } finally {
@@ -243,6 +249,27 @@ export default function LoginScreen() {
                     style={styles.input}
                     maxLength={32}
                   />
+                </>
+              ) : null}
+              {panel === 'kayit' ? (
+                <>
+                  <Text style={styles.fieldLabel}>Ruh hali</Text>
+                  <View style={styles.moods}>
+                    {MATCH_MOODS.map((option) => {
+                      const selected = mood === option.value;
+                      return (
+                        <Pressable
+                          key={option.value}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          onPress={() => setMood(option.value)}
+                          style={[styles.mood, selected && styles.moodOn]}
+                        >
+                          <Text style={[styles.moodLabel, selected && styles.moodLabelOn]}>{option.label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 </>
               ) : null}
               <Text style={styles.fieldLabel}>E-posta</Text>
@@ -572,6 +599,30 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(10, 22, 40, 0.78)',
     padding: 16,
     gap: 12,
+  },
+  moods: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  mood: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(120, 180, 230, 0.45)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  moodOn: {
+    backgroundColor: '#1D6FE0',
+    borderColor: '#1D6FE0',
+  },
+  moodLabel: {
+    color: night.text,
+    fontSize: 13,
+  },
+  moodLabelOn: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   fieldLabel: {
     color: night.glowBright,
